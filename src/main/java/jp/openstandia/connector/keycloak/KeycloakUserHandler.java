@@ -55,7 +55,7 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
     public static final String ATTR_CREATED_TIMESTAMP = "createdTimestamp";
 
     // Association
-    // groups is a list of keyclaok group's id
+    // groups is a list of keycloak group's id
     public static final String ATTR_GROUPS = "groups";
 
     // Password
