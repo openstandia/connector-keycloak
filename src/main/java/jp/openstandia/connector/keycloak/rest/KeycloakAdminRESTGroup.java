@@ -34,8 +34,7 @@ import javax.ws.rs.core.Response;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static jp.openstandia.connector.keycloak.KeycloakGroupHandler.ATTR_SUB_GROUPS;
-import static jp.openstandia.connector.keycloak.KeycloakGroupHandler.GROUP_OBJECT_CLASS;
+import static jp.openstandia.connector.keycloak.KeycloakGroupHandler.*;
 import static jp.openstandia.connector.keycloak.KeycloakUtils.*;
 import static jp.openstandia.connector.keycloak.rest.KeycloakRESTUtils.checkCreateResult;
 
@@ -70,16 +69,21 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
     public Uid createGroup(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException {
         GroupRepresentation rep = toGroupRep(schema, createAttributes);
 
-        Response res = groups(realmName).add(rep);
+        Response res;
+
+        // We use "path" field ad temporary store.
+        // Don't forget clear it before submitting.
+        String parentId = rep.getPath();
+        if (parentId != null) {
+            rep.setPath(null);
+
+            // Keycloak creates sub group with parent group
+            res = groups(realmName).group(parentId).subGroup(rep);
+        } else {
+            res = groups(realmName).add(rep);
+        }
 
         String uuid = checkCreateResult(res, "createGroup");
-
-        // We need to call another API to add/remove parent group for this group.
-        // It means that we can't execute this operation as a single transaction.
-        // Therefore, Keycloak data may be inconsistent if below callings are failed.
-        // Although this connector doesn't handle this situation, IDM can retry the update to resolve this inconsistency.
-
-        // TODO implement group tree
 
         return new Uid(uuid, new Name(rep.getName()));
     }
@@ -90,6 +94,11 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         for (Attribute attr : attributes) {
             if (attr.getName().equals(Name.NAME)) {
                 newGroup.setName(AttributeUtil.getAsStringValue(attr));
+
+            } else if (attr.getName().equals(ATTR_PARENT_GROUP)) {
+                // We use "path" field ad temporary store.
+                // Don't forget clear it before submitting.
+                newGroup.setPath(AttributeUtil.getAsStringValue(attr));
 
             } else {
                 if (!schema.isGroupSchema(attr)) {
@@ -115,10 +124,12 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
     @Override
     public void updateGroup(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException {
         GroupsResource resource = groups(realmName);
+        GroupRepresentation current;
+        String newParentGroupId = null;
 
         try {
             GroupResource group = resource.group(uid.getUidValue());
-            GroupRepresentation current = group.toRepresentation();
+            current = group.toRepresentation();
 
             for (AttributeDelta delta : modifications) {
                 if (delta.getName().equals(Uid.NAME)) {
@@ -127,6 +138,9 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
                 } else if (delta.getName().equals(Name.NAME)) {
                     current.setName(AttributeDeltaUtil.getAsStringValue(delta));
+
+                } else if (delta.getName().equals(ATTR_PARENT_GROUP)) {
+                    newParentGroupId = AttributeDeltaUtil.getAsStringValue(delta);
 
                 } else if (schema.isGroupSchema(delta)) {
                     if (schema.isMultiValuedGroupSchema(delta)) {
@@ -176,7 +190,29 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         // Therefore, Keycloak data may be inconsistent if below callings are failed.
         // Although this connector doesn't handle this situation, IDM can retry the update to resolve this inconsistency.
 
-        // TODO implement group tree
+        if (isTopGroup(current)) {
+            if (newParentGroupId == null) {
+                // From top => top
+                // Do nothing!!
+            } else {
+                // From top => sub
+                groups(realmName).group(newParentGroupId).subGroup(current);
+            }
+        } else {
+            if (newParentGroupId == null) {
+                // From sub => top level
+                groups(realmName).add(current);
+            } else {
+                // From sub => sub with different parent
+                groups(realmName).group(newParentGroupId).subGroup(current);
+            }
+        }
+    }
+
+    private boolean isTopGroup(GroupRepresentation rep) {
+        String path = rep.getPath();
+        long count = path.chars().filter(ch -> ch == '/').count();
+        return count == 1;
     }
 
     @Override
@@ -211,7 +247,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             }
 
             for (GroupRepresentation rep : results) {
-                handler.handle(toConnectorObject(schema, rep, attributesToGet, allowPartialAttributeValues));
+                handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
             }
 
             total += results.size();
@@ -221,7 +257,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
     @Override
     public void getGroup(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options,
-                         Set<String> attributesToGet) {
+                         Set<String> attributesToGet, int queryPageSize) {
         try {
             GroupRepresentation rep = groups(realmName).group(uid.getUidValue()).toRepresentation();
 
@@ -232,7 +268,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
             boolean allowPartialAttributeValues = shouldAllowPartialAttributeValues(options);
 
-            handler.handle(toConnectorObject(schema, rep, attributesToGet, allowPartialAttributeValues));
+            handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
 
         } catch (NotFoundException e) {
             // Don't throw UnknownUidException
@@ -268,7 +304,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             for (GroupRepresentation rep : results) {
                 if (rep.getName().equalsIgnoreCase(name.getNameValue())) {
                     // Found
-                    handler.handle(toConnectorObject(schema, rep, attributesToGet, allowPartialAttributeValues));
+                    handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
                     return;
                 }
             }
@@ -282,14 +318,16 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
     }
 
 
-    private ConnectorObject toConnectorObject(KeycloakSchema schema, GroupRepresentation rep,
-                                              Set<String> attributesToGet, boolean allowPartialAttributeValues) {
+    private ConnectorObject toConnectorObject(KeycloakSchema schema, String realmName, GroupRepresentation rep,
+                                              Set<String> attributesToGet, boolean allowPartialAttributeValues, int queryPageSize) {
         final ConnectorObjectBuilder builder = new ConnectorObjectBuilder()
                 .setObjectClass(GROUP_OBJECT_CLASS)
                 // Always returns "id"
                 .setUid(rep.getId())
                 // Always returns "name"
                 .setName(rep.getName());
+
+        builder.addAttribute(ATTR_PATH, rep.getPath());
 
         Map<String, List<String>> attributes = rep.getAttributes();
         if (attributes != null) {
@@ -310,26 +348,82 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
         if (allowPartialAttributeValues) {
             // Suppress fetching groups
-            LOGGER.ok("[{0}] Suppress fetching sub groups because return partial attribute values is requested", instanceName);
+            LOGGER.ok("[{0}] Suppress fetching parent group because return partial attribute values is requested", instanceName);
 
             AttributeBuilder ab = new AttributeBuilder();
-            ab.setName(ATTR_SUB_GROUPS).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
+            ab.setName(ATTR_PARENT_GROUP).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
             ab.addValue(Collections.EMPTY_LIST);
             builder.addAttribute(ab.build());
         } else {
             if (attributesToGet == null) {
                 // Suppress fetching groups default
-                LOGGER.ok("[{0}] Suppress fetching sub groups because returned by default is true", instanceName);
+                LOGGER.ok("[{0}] Suppress fetching parent group because returned by default is true", instanceName);
 
-            } else if (shouldReturn(attributesToGet, ATTR_SUB_GROUPS)) {
+            } else if (shouldReturn(attributesToGet, ATTR_PARENT_GROUP)) {
                 // Fetch groups
-                LOGGER.ok("[{0}] Fetching sub groups because attributes to get is requested", instanceName);
+                LOGGER.ok("[{0}] Fetching parent group because attributes to get is requested", instanceName);
 
-//                List<String> groups = userGroupHandler.getGroupsForUser(user.getId());
-//                builder.addAttribute(ATTR_GROUPS, groups);
+                // Examples of the path value:
+                // root group "foo" => /foo
+                // sub group "bar" => /foo/bar
+                String path = rep.getPath();
+                String[] pathList = path.split("/");
+
+                String parentGroupName = null;
+                if (pathList.length > 2) {
+                    parentGroupName = pathList[pathList.length - 2];
+                }
+
+                if (parentGroupName != null) {
+                    String parentGroupId = findParentGroupByName(realmName, parentGroupName, rep.getId(), queryPageSize);
+                    if (parentGroupId != null) {
+                        builder.addAttribute(ATTR_PARENT_GROUP, parentGroupId);
+                    }
+                }
             }
         }
 
         return builder.build();
+    }
+
+    private String findParentGroupByName(String realmName, String parentGroupName, String groupId, int queryPageSize) {
+        GroupsResource groups = groups(realmName);
+
+        Map<String, Long> countMap = groups.count();
+        Long count = countMap.get("count");
+
+        int start = 0;
+        int total = 0;
+
+        while (total < count) {
+            int end = start + queryPageSize;
+
+            List<GroupRepresentation> results = groups.groups(parentGroupName, start, end, true);
+
+            if (results.size() == 0) {
+                break;
+            }
+
+            for (GroupRepresentation rep : results) {
+                if (rep.getName().equalsIgnoreCase(parentGroupName)) {
+                    List<GroupRepresentation> subGroups = rep.getSubGroups();
+                    if (subGroups != null) {
+                        Optional<GroupRepresentation> sub = subGroups.stream().filter(g -> g.getId().equalsIgnoreCase(groupId)).findFirst();
+                        if (sub.isPresent()) {
+                            // Found
+                            return rep.getId();
+                        }
+                    }
+                }
+            }
+
+            total += results.size();
+            start = end + 1;
+        }
+
+        // NotFound
+        LOGGER.warn("[{0}] Not found parent group \"{1}\" for \"{2}\" ", instanceName, parentGroupName, groupId);
+
+        return null;
     }
 }

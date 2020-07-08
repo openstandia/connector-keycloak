@@ -58,7 +58,7 @@ public interface KeycloakClient {
 
         void getGroups(KeycloakSchema schema, String realmName, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
 
-        void getGroup(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet);
+        void getGroup(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
 
         void getGroup(KeycloakSchema schema, String realmName, Name name, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
     }

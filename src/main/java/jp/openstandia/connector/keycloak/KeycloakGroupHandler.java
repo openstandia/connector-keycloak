@@ -42,9 +42,12 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
     // Don't use "id" here because it conflicts midpoint side.
     public static final String ATTR_GROUP_ID = "groupId";
 
+    // read-only
+    public static final String ATTR_PATH = "path";
+
     // Association
-    public static final String ATTR_USERS = "users";
-    public static final String ATTR_SUB_GROUPS = "sub_groups";
+    public static final String ATTR_PARENT_GROUP = "parentGroup";
+    public static final String ATTR_SUB_GROUPS = "subGroups";
 
     public KeycloakGroupHandler(String instanceName, KeycloakConfiguration configuration, KeycloakClient client,
                                 KeycloakSchema schema) {
@@ -71,6 +74,14 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
                 .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
                 .build());
 
+        // path(read-only)
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_PATH)
+                .setRequired(false)
+                .setCreateable(false)
+                .setUpdateable(false)
+                .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
+                .build());
+
         // Attributes
         for (String attr : attributes) {
             String attrName;
@@ -93,12 +104,8 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
         }
 
         // Association
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_USERS)
-                .setMultiValued(true)
-                .setReturnedByDefault(false)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_SUB_GROUPS)
-                .setMultiValued(true)
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_PARENT_GROUP)
+                .setMultiValued(false)
                 .setReturnedByDefault(false)
                 .build());
 
@@ -167,12 +174,15 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
         Set<String> attributesToGet = createFullAttributesToGet(schema.groupSchema, options);
 
         if (filter == null) {
-            client.group().getGroups(schema, configuration.getTargetRealmName(), resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
+            client.group().getGroups(schema, configuration.getTargetRealmName(),
+                    resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
         } else {
             if (filter.isByUid()) {
-                client.group().getGroup(schema, configuration.getTargetRealmName(), filter.uid, resultsHandler, options, attributesToGet);
+                client.group().getGroup(schema, configuration.getTargetRealmName(), filter.uid,
+                        resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
             } else {
-                client.group().getGroup(schema, configuration.getTargetRealmName(), filter.name, resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
+                client.group().getGroup(schema, configuration.getTargetRealmName(), filter.name,
+                        resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
             }
         }
     }

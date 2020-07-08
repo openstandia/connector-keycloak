@@ -244,12 +244,15 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
         Set<String> attributesToGet = createFullAttributesToGet(schema.userSchema, options);
 
         if (filter == null) {
-            client.user().getUsers(schema, configuration.getTargetRealmName(), resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
+            client.user().getUsers(schema, configuration.getTargetRealmName(),
+                    resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
         } else {
             if (filter.isByUid()) {
-                client.user().getUser(schema, configuration.getTargetRealmName(), filter.uid, resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
+                client.user().getUser(schema, configuration.getTargetRealmName(), filter.uid,
+                        resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
             } else {
-                client.user().getUser(schema, configuration.getTargetRealmName(), filter.name, resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
+                client.user().getUser(schema, configuration.getTargetRealmName(), filter.name,
+                        resultsHandler, options, attributesToGet, configuration.getQueryPageSize());
             }
         }
     }

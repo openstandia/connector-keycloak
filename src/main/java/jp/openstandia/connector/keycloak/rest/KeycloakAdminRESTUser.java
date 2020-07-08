@@ -157,7 +157,6 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 newUser.setLastName(AttributeUtil.getAsStringValue(attr));
 
             } else if (attr.getName().equals(ATTR_GROUPS)) {
-
                 // Keycloak expects the group list as group path list.
                 // Because we set group id list here, we cant't use it for this API.
                 // See createUser method.
