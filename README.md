@@ -2,7 +2,7 @@
 
 ## Description
 
-Connector for [Keycloak](https://keycloak.org).
+[MidPoint](https://github.com/Evolveum/midpoint) Connector for [Keycloak](https://keycloak.org).
 
 ## Capabilities and Features
 
@@ -12,6 +12,8 @@ Connector for [Keycloak](https://keycloak.org).
 * Password: YES
 * Activation: YES
 * Script execution: No 
+
+This connector contains support for Keycloak user and group.
 
 ## Build
 
