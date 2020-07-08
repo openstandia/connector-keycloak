@@ -389,7 +389,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
     private String findParentGroupByName(String realmName, String parentGroupName, String groupId, int queryPageSize) {
         GroupsResource groups = groups(realmName);
 
-        Map<String, Long> countMap = groups.count();
+        Map<String, Long> countMap = groups.count(parentGroupName);
         Long count = countMap.get("count");
 
         int start = 0;
