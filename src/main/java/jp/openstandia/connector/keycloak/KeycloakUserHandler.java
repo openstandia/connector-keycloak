@@ -221,9 +221,7 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
             throw new InvalidAttributeValueException("modifications not provided or empty");
         }
 
-        client.user().updateUser(schema, configuration.getTargetRealmName(), uid, modifications, options);
-
-        return null;
+        return client.user().updateUser(schema, configuration.getTargetRealmName(), uid, modifications, options);
     }
 
     /**

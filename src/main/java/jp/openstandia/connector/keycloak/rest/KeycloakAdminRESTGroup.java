@@ -18,6 +18,7 @@ package jp.openstandia.connector.keycloak.rest;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
+import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
@@ -85,14 +86,16 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
         String uuid = checkCreateResult(res, "createGroup");
 
-        return new Uid(uuid, new Name(rep.getName()));
+        Name name = createNameForGroup(parentId, rep.getName());
+
+        return new Uid(uuid, name);
     }
 
     protected GroupRepresentation toGroupRep(KeycloakSchema schema, Set<Attribute> attributes) {
         GroupRepresentation newGroup = new GroupRepresentation();
 
         for (Attribute attr : attributes) {
-            if (attr.getName().equals(Name.NAME)) {
+            if (attr.getName().equals(ATTR_NAME)) {
                 newGroup.setName(AttributeUtil.getAsStringValue(attr));
 
             } else if (attr.getName().equals(ATTR_PARENT_GROUP)) {
@@ -122,7 +125,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
     }
 
     @Override
-    public void updateGroup(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException {
+    public Set<AttributeDelta> updateGroup(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException {
         GroupsResource resource = groups(realmName);
         GroupRepresentation current;
         String newParentGroupId = null;
@@ -136,7 +139,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                     // Keycloak doesn't support to modify 'id'
                     invalidSchema(delta.getName());
 
-                } else if (delta.getName().equals(Name.NAME)) {
+                } else if (delta.getName().equals(ATTR_NAME)) {
                     current.setName(AttributeDeltaUtil.getAsStringValue(delta));
 
                 } else if (delta.getName().equals(ATTR_PARENT_GROUP)) {
@@ -197,16 +200,29 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             } else {
                 // From top => sub
                 groups(realmName).group(newParentGroupId).subGroup(current);
+                return newGroupNameWithParentId(newParentGroupId, current);
             }
         } else {
             if (newParentGroupId == null) {
                 // From sub => top level
                 groups(realmName).add(current);
+                return newGroupNameWithParentId(newParentGroupId, current);
             } else {
                 // From sub => sub with different parent
                 groups(realmName).group(newParentGroupId).subGroup(current);
+                return newGroupNameWithParentId(newParentGroupId, current);
             }
         }
+
+        // No side effects
+        return null;
+    }
+
+    private Set<AttributeDelta> newGroupNameWithParentId(String parentGroupId, GroupRepresentation rep) {
+        Set<AttributeDelta> sideEffect = new HashSet<>();
+        AttributeDelta delta = AttributeDeltaBuilder.build(Name.NAME, createNameStringForGroup(parentGroupId, rep.getName()));
+        sideEffect.add(delta);
+        return sideEffect;
     }
 
     private boolean isTopGroup(GroupRepresentation rep) {
@@ -247,7 +263,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             }
 
             for (GroupRepresentation rep : results) {
-                handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
+                handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize, null));
             }
 
             total += results.size();
@@ -268,13 +284,14 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
             boolean allowPartialAttributeValues = shouldAllowPartialAttributeValues(options);
 
-            handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
+            handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize,
+                    uid.getNameHintValue()));
 
         } catch (NotFoundException e) {
             // Don't throw UnknownUidException
             // The executeQuery should not indicate any error in this case. It should not throw any exception.
             // MidPoint will see empty result set and it will figure out that there is no such object.
-            LOGGER.warn("[{0}] Unknown groupId: {1}, name: {2}", instanceName, uid.getUidValue(), uid.getNameHintValue());
+            LOGGER.warn("[{0}] Unknown groupId: {1}, name: {2}", instanceName, uid.getUidValue(), uid.getNameHint());
             return;
         }
     }
@@ -304,7 +321,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             for (GroupRepresentation rep : results) {
                 if (rep.getName().equalsIgnoreCase(name.getNameValue())) {
                     // Found
-                    handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
+                    handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize, name.getNameValue()));
                     return;
                 }
             }
@@ -317,16 +334,21 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         LOGGER.warn("[{0}] Unknown group: {1}", instanceName, name.getNameValue());
     }
 
-
     private ConnectorObject toConnectorObject(KeycloakSchema schema, String realmName, GroupRepresentation rep,
-                                              Set<String> attributesToGet, boolean allowPartialAttributeValues, int queryPageSize) {
+                                              Set<String> attributesToGet, boolean allowPartialAttributeValues, int queryPageSize, String nameHintValue) {
         final ConnectorObjectBuilder builder = new ConnectorObjectBuilder()
                 .setObjectClass(GROUP_OBJECT_CLASS)
                 // Always returns "id"
-                .setUid(rep.getId())
-                // Always returns "name"
-                .setName(rep.getName());
+                .setUid(rep.getId());
 
+        // If nameHintValue is passed by IDM, we can build __NAME__ with current keycloak group name.
+        String parentGroupId = null;
+        if (nameHintValue != null) {
+            parentGroupId = getParentGroupId(nameHintValue);
+            builder.setName(createNameStringForGroup(parentGroupId, rep.getName()));
+        }
+
+        builder.addAttribute(ATTR_NAME, rep.getName());
         builder.addAttribute(ATTR_PATH, rep.getPath());
 
         Map<String, List<String>> attributes = rep.getAttributes();
@@ -363,21 +385,33 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 // Fetch groups
                 LOGGER.ok("[{0}] Fetching parent group because attributes to get is requested", instanceName);
 
-                // Examples of the path value:
-                // root group "foo" => /foo
-                // sub group "bar" => /foo/bar
-                String path = rep.getPath();
-                String[] pathList = path.split("/");
-
-                String parentGroupName = null;
-                if (pathList.length > 2) {
-                    parentGroupName = pathList[pathList.length - 2];
-                }
-
-                if (parentGroupName != null) {
-                    String parentGroupId = findParentGroupByName(realmName, parentGroupName, rep.getId(), queryPageSize);
-                    if (parentGroupId != null) {
+                // If we get nameHintValue, shortcut fetching the parent group
+                if (parentGroupId != null) {
+                    if (parentGroupId.isEmpty()) {
+                        builder.addAttribute(ATTR_PARENT_GROUP);
+                    } else {
                         builder.addAttribute(ATTR_PARENT_GROUP, parentGroupId);
+                    }
+
+                } else {
+                    // When no nameHintValue, we need to fetch the parent group using path value
+
+                    // Examples of the path value:
+                    // root group "foo" => /foo
+                    // sub group "bar" => /foo/bar
+                    String path = rep.getPath();
+                    String[] pathList = path.split("/");
+
+                    String parentGroupName = null;
+                    if (pathList.length > 2) {
+                        parentGroupName = pathList[pathList.length - 2];
+                    }
+
+                    if (parentGroupName != null) {
+                        parentGroupId = findParentGroupByName(realmName, parentGroupName, rep.getId(), queryPageSize);
+                        if (parentGroupId != null) {
+                            builder.addAttribute(ATTR_PARENT_GROUP, parentGroupId);
+                        }
                     }
                 }
             }
@@ -386,7 +420,18 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         return builder.build();
     }
 
-    private String findParentGroupByName(String realmName, String parentGroupName, String groupId, int queryPageSize) {
+    /**
+     * Find parent group by the parent group name and sub groupId.
+     * This method might cause performance trouble because Keycloak Admin REST API doesn't provide search API with
+     * exact match. The API always use search query with "LIKE %search_word%" which is not efficient for RDBMS.
+     *
+     * @param realmName
+     * @param parentGroupName
+     * @param subGroupId
+     * @param queryPageSize
+     * @return Returns parent groupId (UUID) if exists. If no parent, it returns null value.
+     */
+    private String findParentGroupByName(String realmName, String parentGroupName, String subGroupId, int queryPageSize) {
         GroupsResource groups = groups(realmName);
 
         Map<String, Long> countMap = groups.count(parentGroupName);
@@ -408,7 +453,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 if (rep.getName().equalsIgnoreCase(parentGroupName)) {
                     List<GroupRepresentation> subGroups = rep.getSubGroups();
                     if (subGroups != null) {
-                        Optional<GroupRepresentation> sub = subGroups.stream().filter(g -> g.getId().equalsIgnoreCase(groupId)).findFirst();
+                        Optional<GroupRepresentation> sub = subGroups.stream().filter(g -> g.getId().equalsIgnoreCase(subGroupId)).findFirst();
                         if (sub.isPresent()) {
                             // Found
                             return rep.getId();
@@ -422,7 +467,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         }
 
         // NotFound
-        LOGGER.warn("[{0}] Not found parent group \"{1}\" for \"{2}\" ", instanceName, parentGroupName, groupId);
+        LOGGER.warn("[{0}] Not found parent group \"{1}\" for \"{2}\" ", instanceName, parentGroupName, subGroupId);
 
         return null;
     }

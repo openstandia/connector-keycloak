@@ -38,7 +38,7 @@ public interface KeycloakClient {
     interface User {
         Uid createUser(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException;
 
-        void updateUser(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException;
+        Set<AttributeDelta> updateUser(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException;
 
         void deleteUser(KeycloakSchema schema, String realmName, Uid uid, OperationOptions options) throws UnknownUidException;
 
@@ -52,7 +52,7 @@ public interface KeycloakClient {
     interface Group {
         Uid createGroup(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException;
 
-        void updateGroup(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException;
+        Set<AttributeDelta> updateGroup(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException;
 
         void deleteGroup(KeycloakSchema schema, String realmName, Uid uid, OperationOptions options) throws UnknownUidException;
 

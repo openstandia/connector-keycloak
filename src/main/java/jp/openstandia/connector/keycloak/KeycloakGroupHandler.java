@@ -35,8 +35,11 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
 
     private static final Log LOGGER = Log.getLog(KeycloakGroupHandler.class);
 
-    // Unique and changeable within the keycloak realm
-    private static final String ATTR_GROUP_NAME = "name";
+    // Unique within the keycloak realm
+    public static final String ATTR_NAME_WITH_PARENT_ID = "nameWithParentId";
+
+    // Unique in the same group level and changeable within the keycloak realm
+    public static final String ATTR_NAME = "name";
 
     // Unique and unchangeable within the keycloak realm.
     // Don't use "id" here because it conflicts midpoint side.
@@ -47,7 +50,6 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
 
     // Association
     public static final String ATTR_PARENT_GROUP = "parentGroup";
-    public static final String ATTR_SUB_GROUPS = "subGroups";
 
     public KeycloakGroupHandler(String instanceName, KeycloakConfiguration configuration, KeycloakClient client,
                                 KeycloakSchema schema) {
@@ -68,9 +70,17 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
 
         // __NAME__
         builder.addAttributeInfo(AttributeInfoBuilder.define(Name.NAME)
+                .setRequired(false) // Must be optional. It is not present for create operations
+                .setCreateable(false)
+                .setUpdateable(false)
+                .setNativeName(ATTR_NAME_WITH_PARENT_ID)
+                .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
+                .build());
+
+        // name
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_NAME)
                 .setRequired(true)
                 .setUpdateable(true)
-                .setNativeName(ATTR_GROUP_NAME)
                 .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
                 .build());
 
@@ -145,9 +155,7 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
             throw new InvalidAttributeValueException("modifications not provided or empty");
         }
 
-        client.group().updateGroup(schema, configuration.getTargetRealmName(), uid, modifications, options);
-
-        return null;
+        return client.group().updateGroup(schema, configuration.getTargetRealmName(), uid, modifications, options);
     }
 
     /**

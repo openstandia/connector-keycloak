@@ -201,8 +201,8 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
     }
 
     @Override
-    public void updateUser(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications,
-                           OperationOptions options) throws UnknownUidException {
+    public Set<AttributeDelta> updateUser(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications,
+                                          OperationOptions options) throws UnknownUidException {
         UsersResource usersResource = users(realmName);
         UserRepresentation current;
         List<String> addGroupIds = new ArrayList<>();
@@ -337,6 +337,9 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                         groupId, current.getId(), current.getUsername());
             }
         }
+
+        // No side effects
+        return null;
     }
 
     @Override

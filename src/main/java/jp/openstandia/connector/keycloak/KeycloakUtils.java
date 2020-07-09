@@ -15,6 +15,7 @@
  */
 package jp.openstandia.connector.keycloak;
 
+import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.objects.*;
 
@@ -32,6 +33,28 @@ import java.util.stream.Collectors;
  * @author Hiroyuki Wada
  */
 public class KeycloakUtils {
+
+    public static Name createNameForGroup(String parentId, String name) {
+        return new Name(createNameStringForGroup(parentId, name));
+    }
+
+    public static String createNameStringForGroup(String parentId, String name) {
+        if (StringUtil.isEmpty(parentId)) {
+            // Top
+            return "/" + name;
+        } else {
+            return parentId + "/" + name;
+        }
+    }
+
+    /**
+     * @param nameValue
+     * @return If it's top level, returns empty string.
+     */
+    public static String getParentGroupId(String nameValue) {
+        String[] split = nameValue.split("/");
+        return split[0];
+    }
 
     public static ZonedDateTime toZoneDateTime(Instant instant) {
         ZoneId zone = ZoneId.systemDefault();
