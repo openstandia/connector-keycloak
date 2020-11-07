@@ -22,12 +22,14 @@ import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
+import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.info.ServerInfoRepresentation;
 
 import javax.ws.rs.ProcessingException;
+import javax.ws.rs.ext.RuntimeDelegate;
 
 import static jp.openstandia.connector.keycloak.KeycloakUtils.getRootCause;
 
@@ -49,6 +51,13 @@ public class KeycloakAdminRESTClient implements KeycloakClient {
     public KeycloakAdminRESTClient(String instanceName, KeycloakConfiguration configuration) {
         this.instanceName = instanceName;
         this.cofiguration = configuration;
+
+        try {
+            RuntimeDelegate.getInstance();
+        } catch (RuntimeException e) {
+            // Set the implementation directly as a workaround
+            RuntimeDelegate.setInstance(new ResteasyProviderFactory());
+        }
 
         ResteasyClientBuilder resteasyClientBuilder = new ResteasyClientBuilder();
         resteasyClientBuilder.connectionPoolSize(20);
