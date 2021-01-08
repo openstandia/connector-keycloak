@@ -71,6 +71,14 @@ public class KeycloakUtils {
         return AttributeBuilder.build(entry.getKey());
     }
 
+    public static Attribute toConnectorAttributeSingleValue(AttributeInfo attributeInfo, Map.Entry<String, String> entry) {
+        String value = entry.getValue();
+        if (value != null) {
+            return toConnectorAttribute(attributeInfo, entry.getKey(), value);
+        }
+        return AttributeBuilder.build(entry.getKey());
+    }
+
     public static Attribute toConnectorAttribute(AttributeInfo attributeInfo, String attrName, List<String> attrValues) {
         List<Object> values = attrValues.stream()
                 .map(a -> toConnectorAttributeValue(attributeInfo, a))
@@ -231,5 +239,24 @@ public class KeycloakUtils {
             t = t.getCause();
         }
         return list;
+    }
+
+    public static List<String> mergeList(List<String> current, AttributeDelta delta) {
+        if (current == null) {
+            current = new ArrayList<>();
+        }
+        if (delta.getValuesToAdd() != null) {
+            for (Object v : delta.getValuesToAdd()) {
+                current.add(v.toString());
+            }
+        }
+
+        if (delta.getValuesToRemove() != null) {
+            for (Object v : delta.getValuesToRemove()) {
+                current.remove(v.toString());
+            }
+        }
+
+        return current;
     }
 }

@@ -35,6 +35,8 @@ public interface KeycloakClient {
 
     Group group();
 
+    Client client();
+
     interface User {
         Uid createUser(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException;
 
@@ -61,6 +63,20 @@ public interface KeycloakClient {
         void getGroup(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
 
         void getGroup(KeycloakSchema schema, String realmName, Name name, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
+    }
+
+    interface Client {
+        Uid createClient(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException;
+
+        void updateClient(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException;
+
+        void deleteClient(KeycloakSchema schema, String realmName, Uid uid, OperationOptions options) throws UnknownUidException;
+
+        void getClients(KeycloakSchema schema, String realmName, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
+
+        void getClient(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
+
+        void getClient(KeycloakSchema schema, String realmName, Name name, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
     }
 
     void close();

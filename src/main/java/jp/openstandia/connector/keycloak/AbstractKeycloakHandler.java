@@ -15,6 +15,10 @@
  */
 package jp.openstandia.connector.keycloak;
 
+import org.identityconnectors.framework.common.objects.*;
+
+import java.util.Set;
+
 /**
  * Base class for keycloak object handlers.
  *
@@ -33,4 +37,13 @@ public abstract class AbstractKeycloakHandler {
         this.client = client;
         this.schema = schema;
     }
+
+    abstract Uid create(Set<Attribute> attributes);
+
+    abstract Set<AttributeDelta> updateDelta(Uid uid, Set<AttributeDelta> modifications, OperationOptions options);
+
+    abstract void delete(Uid uid, OperationOptions options);
+
+    abstract void query(KeycloakFilter filter, ResultsHandler resultsHandler, OperationOptions options);
+
 }

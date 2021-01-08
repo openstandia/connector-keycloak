@@ -17,7 +17,6 @@ package jp.openstandia.connector.keycloak;
 
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
-import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.objects.*;
 
 import java.util.Set;
@@ -123,11 +122,8 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
      *                                Or there is a similar violation in any of the object attributes that
      *                                cannot be distinguished from AlreadyExists situation.
      */
-    public Uid createGroup(Set<Attribute> attributes) throws AlreadyExistsException {
-        if (attributes == null || attributes.isEmpty()) {
-            throw new InvalidAttributeValueException("attributes not provided or empty");
-        }
-
+    @Override
+    public Uid create(Set<Attribute> attributes) throws AlreadyExistsException {
         return client.group().createGroup(schema, configuration.getTargetRealmName(), attributes);
     }
 
@@ -137,29 +133,19 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
      * @param options
      * @return
      */
+    @Override
     public Set<AttributeDelta> updateDelta(Uid uid, Set<AttributeDelta> modifications, OperationOptions options) {
-        if (uid == null) {
-            throw new InvalidAttributeValueException("uid not provided");
-        }
-        if (modifications == null || modifications.isEmpty()) {
-            throw new InvalidAttributeValueException("modifications not provided or empty");
-        }
-
         client.group().updateGroup(schema, configuration.getTargetRealmName(), uid, modifications, options);
 
         return null;
     }
 
     /**
-     * @param objectClass
      * @param uid
      * @param options
      */
-    public void deleteGroup(ObjectClass objectClass, Uid uid, OperationOptions options) {
-        if (uid == null) {
-            throw new InvalidAttributeValueException("uid not provided");
-        }
-
+    @Override
+    public void delete(Uid uid, OperationOptions options) {
         client.group().deleteGroup(schema, configuration.getTargetRealmName(), uid, options);
     }
 
@@ -168,8 +154,9 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
      * @param resultsHandler
      * @param options
      */
-    public void getGroups(KeycloakFilter filter,
-                          ResultsHandler resultsHandler, OperationOptions options) {
+    @Override
+    public void query(KeycloakFilter filter,
+                      ResultsHandler resultsHandler, OperationOptions options) {
         // Create full attributesToGet by RETURN_DEFAULT_ATTRIBUTES + ATTRIBUTES_TO_GET
         Set<String> attributesToGet = createFullAttributesToGet(schema.groupSchema, options);
 
