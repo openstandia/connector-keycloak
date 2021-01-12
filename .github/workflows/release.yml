@@ -45,7 +45,7 @@ jobs:
       - name: Setup semantic-release
         run: |
           yarn global add @conveyal/maven-semantic-release@v4.5.0 semantic-release@15
-          echo "::add-path::$(yarn global bin)"
+          echo "$(yarn global bin)" >> $GITHUB_PATH
       - name: Test
         run: mvn -B test
       - name: Release

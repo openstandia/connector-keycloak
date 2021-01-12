@@ -15,7 +15,7 @@
  */
 package jp.openstandia.connector.keycloak;
 
-import jp.openstandia.connector.keycloak.rest.KeycloakAdminRESTClient;
+import jp.openstandia.connector.keycloak.rest.KeycloakAdminRESTAdminClient;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.*;
 import org.identityconnectors.framework.common.objects.*;
@@ -30,6 +30,8 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.Response;
 import java.util.Set;
 
+import static jp.openstandia.connector.keycloak.KeycloakClientHandler.CLIENT_OBJECT_CLASS;
+import static jp.openstandia.connector.keycloak.KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakGroupHandler.GROUP_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakUserHandler.USER_OBJECT_CLASS;
 
@@ -74,7 +76,7 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
             client = null;
 
         } else {
-            client = new KeycloakAdminRESTClient(instanceName, configuration);
+            client = new KeycloakAdminRESTAdminClient(instanceName, configuration);
         }
 
     }
@@ -98,29 +100,37 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
         return schema;
     }
 
-    @Override
-    public Uid create(ObjectClass objectClass, Set<Attribute> createAttributes, OperationOptions options) {
+    protected AbstractKeycloakHandler createKeycloakHandler(ObjectClass objectClass) {
         if (objectClass == null) {
             throw new InvalidAttributeValueException("ObjectClass value not provided");
         }
-        LOG.info("CREATE METHOD OBJECTCLASS VALUE: {0}", objectClass);
 
-        if (createAttributes == null) {
+        if (objectClass.equals(USER_OBJECT_CLASS)) {
+            return new KeycloakUserHandler(instanceName, configuration, client, schema);
+
+        } else if (objectClass.equals(GROUP_OBJECT_CLASS)) {
+            return new KeycloakGroupHandler(instanceName, configuration, client, schema);
+
+        } else if (objectClass.equals(CLIENT_OBJECT_CLASS)) {
+            return new KeycloakClientHandler(instanceName, configuration, client, schema);
+
+        } else if (objectClass.equals(CLIENT_ROLE_OBJECT_CLASS)) {
+            return new KeycloakClientRoleHandler(instanceName, configuration, client, schema);
+
+        } else {
+            throw new InvalidAttributeValueException("Unsupported object class " + objectClass);
+        }
+    }
+
+    @Override
+    public Uid create(ObjectClass objectClass, Set<Attribute> createAttributes, OperationOptions options) {
+        if (createAttributes == null || createAttributes.isEmpty()) {
             throw new InvalidAttributeValueException("Attributes not provided or empty");
         }
 
         try {
-            if (objectClass.equals(USER_OBJECT_CLASS)) {
-                KeycloakUserHandler usersHandler = new KeycloakUserHandler(instanceName, configuration, client, schema);
-                return usersHandler.createUser(createAttributes);
+            return createKeycloakHandler(objectClass).create(createAttributes);
 
-            } else if (objectClass.equals(GROUP_OBJECT_CLASS)) {
-                KeycloakGroupHandler groupsHandler = new KeycloakGroupHandler(instanceName, configuration, client, schema);
-                return groupsHandler.createGroup(createAttributes);
-
-            } else {
-                throw new InvalidAttributeValueException("Unsupported object class " + objectClass);
-            }
         } catch (RuntimeException e) {
             throw processRuntimeException(e);
         }
@@ -128,18 +138,16 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
 
     @Override
     public Set<AttributeDelta> updateDelta(ObjectClass objectClass, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) {
+        if (uid == null) {
+            throw new InvalidAttributeValueException("uid not provided");
+        }
+        if (modifications == null || modifications.isEmpty()) {
+            throw new InvalidAttributeValueException("modifications not provided or empty");
+        }
+
         try {
-            if (objectClass.equals(USER_OBJECT_CLASS)) {
-                KeycloakUserHandler usersHandler = new KeycloakUserHandler(instanceName, configuration, client, schema);
-                return usersHandler.updateDelta(uid, modifications, options);
+            return createKeycloakHandler(objectClass).updateDelta(uid, modifications, options);
 
-            } else if (objectClass.equals(GROUP_OBJECT_CLASS)) {
-                KeycloakGroupHandler groupsHandler = new KeycloakGroupHandler(instanceName, configuration, client, schema);
-                return groupsHandler.updateDelta(uid, modifications, options);
-
-            } else {
-                throw new InvalidAttributeValueException("Unsupported object class " + objectClass);
-            }
         } catch (RuntimeException e) {
             throw processRuntimeException(e);
         }
@@ -147,18 +155,13 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
 
     @Override
     public void delete(ObjectClass objectClass, Uid uid, OperationOptions options) {
+        if (uid == null) {
+            throw new InvalidAttributeValueException("uid not provided");
+        }
+
         try {
-            if (objectClass.equals(USER_OBJECT_CLASS)) {
-                KeycloakUserHandler usersHandler = new KeycloakUserHandler(instanceName, configuration, client, schema);
-                usersHandler.deleteUser(uid, options);
+            createKeycloakHandler(objectClass).delete(uid, options);
 
-            } else if (objectClass.equals(GROUP_OBJECT_CLASS)) {
-                KeycloakGroupHandler groupsHandler = new KeycloakGroupHandler(instanceName, configuration, client, schema);
-                groupsHandler.deleteGroup(objectClass, uid, options);
-
-            } else {
-                throw new InvalidAttributeValueException("Unsupported object class " + objectClass);
-            }
         } catch (RuntimeException e) {
             throw processRuntimeException(e);
         }
@@ -171,34 +174,16 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
 
     @Override
     public void executeQuery(ObjectClass objectClass, KeycloakFilter filter, ResultsHandler resultsHandler, OperationOptions options) {
-        if (objectClass.equals(USER_OBJECT_CLASS)) {
-            try {
-                KeycloakUserHandler usersHandler = new KeycloakUserHandler(instanceName, configuration, client, schema);
-                usersHandler.getUsers(filter, resultsHandler, options);
-            } catch (NotFoundException e) {
-                // Don't throw UnknownUidException
-                // The executeQuery should not indicate any error in this case. It should not throw any exception.
-                // MidPoint will see empty result set and it will figure out that there is no such object.
-                return;
-            } catch (RuntimeException e) {
-                throw processRuntimeException(e);
-            }
+        try {
+            createKeycloakHandler(objectClass).query(filter, resultsHandler, options);
 
-        } else if (objectClass.equals(GROUP_OBJECT_CLASS)) {
-            try {
-                KeycloakGroupHandler groupsHandler = new KeycloakGroupHandler(instanceName, configuration, client, schema);
-                groupsHandler.getGroups(filter, resultsHandler, options);
-            } catch (NotFoundException e) {
-                // Don't throw UnknownUidException
-                // The executeQuery should not indicate any error in this case. It should not throw any exception.
-                // MidPoint will see empty result set and it will figure out that there is no such object.
-                return;
-            } catch (RuntimeException e) {
-                throw processRuntimeException(e);
-            }
-
-        } else {
-            throw new InvalidAttributeValueException("Unsupported object class " + objectClass);
+        } catch (NotFoundException e) {
+            // Don't throw UnknownUidException
+            // The executeQuery should not indicate any error in this case. It should not throw any exception.
+            // MidPoint will see empty result set and it will figure out that there is no such object.
+            return;
+        } catch (RuntimeException e) {
+            throw processRuntimeException(e);
         }
     }
 

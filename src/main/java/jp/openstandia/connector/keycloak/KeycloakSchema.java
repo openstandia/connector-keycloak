@@ -41,6 +41,8 @@ public class KeycloakSchema {
     public final Schema schema;
     public final Map<String, AttributeInfo> userSchema;
     public final Map<String, AttributeInfo> groupSchema;
+    public final Map<String, AttributeInfo> clientSchema;
+    public final Map<String, AttributeInfo> clientRoleSchema;
 
     public KeycloakSchema(KeycloakConfiguration configuration, KeycloakClient client) {
         this.configuration = configuration;
@@ -53,6 +55,12 @@ public class KeycloakSchema {
 
         ObjectClassInfo groupSchemaInfo = KeycloakGroupHandler.getGroupSchema(getGroupAttributes());
         schemaBuilder.defineObjectClass(groupSchemaInfo);
+
+        ObjectClassInfo clientSchemaInfo = KeycloakClientHandler.getClientSchema(getClientAttributes());
+        schemaBuilder.defineObjectClass(clientSchemaInfo);
+
+        ObjectClassInfo clientRoleSchemaInfo = KeycloakClientRoleHandler.getSchema(new String[]{});
+        schemaBuilder.defineObjectClass(clientRoleSchemaInfo);
 
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildAttributesToGet(), SearchOp.class);
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildReturnDefaultAttributes(), SearchOp.class);
@@ -69,8 +77,20 @@ public class KeycloakSchema {
             groupSchemaMap.put(info.getName(), info);
         }
 
+        Map<String, AttributeInfo> clientSchemaMap = new HashMap<>();
+        for (AttributeInfo info : clientSchemaInfo.getAttributeInfo()) {
+            clientSchemaMap.put(info.getName(), info);
+        }
+
+        Map<String, AttributeInfo> clientRoleSchemaMap = new HashMap<>();
+        for (AttributeInfo info : clientRoleSchemaInfo.getAttributeInfo()) {
+            clientRoleSchemaMap.put(info.getName(), info);
+        }
+
         this.userSchema = Collections.unmodifiableMap(userSchemaMap);
         this.groupSchema = Collections.unmodifiableMap(groupSchemaMap);
+        this.clientSchema = Collections.unmodifiableMap(clientSchemaMap);
+        this.clientRoleSchema = Collections.unmodifiableMap(clientRoleSchemaMap);
 
         this.version = client.getVersion();
 
@@ -105,6 +125,14 @@ public class KeycloakSchema {
         String groupAttributes = configuration.getGroupAttributes();
         if (groupAttributes != null) {
             return groupAttributes.split(",");
+        }
+        return new String[]{};
+    }
+
+    private String[] getClientAttributes() {
+        String clientAttributes = configuration.getClientAttributes();
+        if (clientAttributes != null) {
+            return clientAttributes.split(",");
         }
         return new String[]{};
     }
@@ -147,5 +175,25 @@ public class KeycloakSchema {
 
     public AttributeInfo getGroupSchema(String attributeName) {
         return groupSchema.get(attributeName);
+    }
+
+    public boolean isClientSchema(Attribute attribute) {
+        return clientSchema.containsKey(attribute.getName());
+    }
+
+    public boolean isMultiValuedClientSchema(Attribute attribute) {
+        return clientSchema.get(attribute.getName()).isMultiValued();
+    }
+
+    public boolean isClientSchema(AttributeDelta delta) {
+        return clientSchema.containsKey(delta.getName());
+    }
+
+    public boolean isMultiValuedClientSchema(AttributeDelta delta) {
+        return clientSchema.get(delta.getName()).isMultiValued();
+    }
+
+    public AttributeInfo getClientSchema(String attributeName) {
+        return clientSchema.get(attributeName);
     }
 }

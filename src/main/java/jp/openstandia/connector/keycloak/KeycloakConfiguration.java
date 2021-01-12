@@ -37,6 +37,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     private String targetRealmName;
     private String userAttributes;
     private String groupAttributes;
+    private String clientAttributes;
     private int queryPageSize;
     private boolean passwordResetAPIEnabled;
     private boolean grpcEnabled;
@@ -152,7 +153,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     @ConfigurationProperty(
             order = 8,
             displayMessageKey = "User Attributes",
-            helpMessageKey = "Keycloak user attributes (comma-separated).",
+            helpMessageKey = "Keycloak user attributes (comma-separated). Use :multivalued suffix for multiple value.",
             required = false,
             confidential = false)
     public String getUserAttributes() {
@@ -166,7 +167,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     @ConfigurationProperty(
             order = 9,
             displayMessageKey = "Group Attributes",
-            helpMessageKey = "Keycloak group attributes (comma-separated).",
+            helpMessageKey = "Keycloak group attributes (comma-separated). Use :multivalued suffix for multiple value.",
             required = false,
             confidential = false)
     public String getGroupAttributes() {
@@ -179,6 +180,20 @@ public class KeycloakConfiguration extends AbstractConfiguration {
 
     @ConfigurationProperty(
             order = 10,
+            displayMessageKey = "Client Attributes",
+            helpMessageKey = "Keycloak client attributes (comma-separated).",
+            required = false,
+            confidential = false)
+    public String getClientAttributes() {
+        return clientAttributes;
+    }
+
+    public void setClientAttributes(String clientAttributes) {
+        this.clientAttributes = clientAttributes;
+    }
+
+    @ConfigurationProperty(
+            order = 11,
             displayMessageKey = "Query Page Size",
             helpMessageKey = "Page size of search query in the connector. Default is 100.",
             required = false,
@@ -195,7 +210,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 10,
+            order = 12,
             displayMessageKey = "Enable Password Reset API for update password",
             helpMessageKey = "If yes, the connector uses password reset API instead of create/update user API. " +
                     "Pros. The raw password isn't recorded in the Keycloak admin event. " +
@@ -211,7 +226,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 11,
+            order = 13,
             displayMessageKey = "Enable gRPC",
             helpMessageKey = "Enable gRPC for the Keycloak API. CAUTION: You need to install keycloak-grpc on the Keycloak server.",
             required = false,
@@ -225,7 +240,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 12,
+            order = 14,
             displayMessageKey = "gRPC Host",
             helpMessageKey = "Hostname for gRPC connection.",
             required = false,
@@ -239,7 +254,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 13,
+            order = 15,
             displayMessageKey = "gRPC Port",
             helpMessageKey = "Port for gRPC connection.",
             required = false,
@@ -253,7 +268,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 14,
+            order = 16,
             displayMessageKey = "HTTP Proxy Host",
             helpMessageKey = "Hostname for the HTTP Proxy",
             required = false,
@@ -267,7 +282,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 15,
+            order = 17,
             displayMessageKey = "HTTP Proxy Port",
             helpMessageKey = "Port for the HTTP Proxy",
             required = false,
@@ -281,7 +296,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 16,
+            order = 18,
             displayMessageKey = "HTTP Proxy User",
             helpMessageKey = "Username for the HTTP Proxy Authentication",
             required = false,
@@ -295,7 +310,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 17,
+            order = 19,
             displayMessageKey = "HTTP Proxy Password",
             helpMessageKey = "Password for the HTTP Proxy Authentication",
             required = false,

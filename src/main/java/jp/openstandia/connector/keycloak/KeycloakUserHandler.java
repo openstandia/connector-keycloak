@@ -16,7 +16,6 @@
 package jp.openstandia.connector.keycloak;
 
 import org.identityconnectors.common.logging.Log;
-import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.objects.*;
 
 import java.time.ZonedDateTime;
@@ -199,11 +198,8 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
      * @param attributes
      * @return
      */
-    public Uid createUser(Set<Attribute> attributes) {
-        if (attributes == null || attributes.isEmpty()) {
-            throw new InvalidAttributeValueException("attributes not provided or empty");
-        }
-
+    @Override
+    public Uid create(Set<Attribute> attributes) {
         return client.user().createUser(schema, configuration.getTargetRealmName(), attributes);
     }
 
@@ -213,14 +209,8 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
      * @param options
      * @return
      */
+    @Override
     public Set<AttributeDelta> updateDelta(Uid uid, Set<AttributeDelta> modifications, OperationOptions options) {
-        if (uid == null) {
-            throw new InvalidAttributeValueException("uid not provided");
-        }
-        if (modifications == null || modifications.isEmpty()) {
-            throw new InvalidAttributeValueException("modifications not provided or empty");
-        }
-
         client.user().updateUser(schema, configuration.getTargetRealmName(), uid, modifications, options);
 
         return null;
@@ -230,16 +220,14 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
      * @param uid
      * @param options
      */
-    public void deleteUser(Uid uid, OperationOptions options) {
-        if (uid == null) {
-            throw new InvalidAttributeValueException("uid not provided");
-        }
-
+    @Override
+    public void delete(Uid uid, OperationOptions options) {
         client.user().deleteUser(schema, configuration.getTargetRealmName(), uid, options);
     }
 
 
-    public void getUsers(KeycloakFilter filter, ResultsHandler resultsHandler, OperationOptions options) {
+    @Override
+    public void query(KeycloakFilter filter, ResultsHandler resultsHandler, OperationOptions options) {
         // Create full attributesToGet by RETURN_DEFAULT_ATTRIBUTES + ATTRIBUTES_TO_GET
         Set<String> attributesToGet = createFullAttributesToGet(schema.userSchema, options);
 
