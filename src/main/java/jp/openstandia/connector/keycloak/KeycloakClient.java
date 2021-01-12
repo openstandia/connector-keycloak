@@ -37,6 +37,8 @@ public interface KeycloakClient {
 
     Client client();
 
+    ClientRole clientRole();
+
     interface User {
         Uid createUser(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException;
 
@@ -77,6 +79,20 @@ public interface KeycloakClient {
         void getClient(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
 
         void getClient(KeycloakSchema schema, String realmName, Name name, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
+    }
+
+    interface ClientRole {
+        Uid createClientRole(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException;
+
+        void updateClientRole(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException;
+
+        void deleteClientRole(KeycloakSchema schema, String realmName, Uid uid, OperationOptions options) throws UnknownUidException;
+
+        void getClientRoles(KeycloakSchema schema, String realmName, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
+
+        void getClientRole(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
+
+        void getClientRole(KeycloakSchema schema, String realmName, Name name, ResultsHandler handler, OperationOptions options, Set<String> attributesToGet, int queryPageSize);
     }
 
     void close();

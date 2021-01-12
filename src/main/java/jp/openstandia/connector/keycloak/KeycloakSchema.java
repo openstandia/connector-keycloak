@@ -42,6 +42,7 @@ public class KeycloakSchema {
     public final Map<String, AttributeInfo> userSchema;
     public final Map<String, AttributeInfo> groupSchema;
     public final Map<String, AttributeInfo> clientSchema;
+    public final Map<String, AttributeInfo> clientRoleSchema;
 
     public KeycloakSchema(KeycloakConfiguration configuration, KeycloakClient client) {
         this.configuration = configuration;
@@ -57,6 +58,9 @@ public class KeycloakSchema {
 
         ObjectClassInfo clientSchemaInfo = KeycloakClientHandler.getClientSchema(getClientAttributes());
         schemaBuilder.defineObjectClass(clientSchemaInfo);
+
+        ObjectClassInfo clientRoleSchemaInfo = KeycloakClientRoleHandler.getSchema(new String[]{});
+        schemaBuilder.defineObjectClass(clientRoleSchemaInfo);
 
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildAttributesToGet(), SearchOp.class);
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildReturnDefaultAttributes(), SearchOp.class);
@@ -78,9 +82,15 @@ public class KeycloakSchema {
             clientSchemaMap.put(info.getName(), info);
         }
 
+        Map<String, AttributeInfo> clientRoleSchemaMap = new HashMap<>();
+        for (AttributeInfo info : clientRoleSchemaInfo.getAttributeInfo()) {
+            clientRoleSchemaMap.put(info.getName(), info);
+        }
+
         this.userSchema = Collections.unmodifiableMap(userSchemaMap);
         this.groupSchema = Collections.unmodifiableMap(groupSchemaMap);
         this.clientSchema = Collections.unmodifiableMap(clientSchemaMap);
+        this.clientRoleSchema = Collections.unmodifiableMap(clientRoleSchemaMap);
 
         this.version = client.getVersion();
 
