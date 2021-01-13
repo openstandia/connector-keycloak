@@ -89,6 +89,7 @@ public class KeycloakClientHandler extends AbstractKeycloakHandler {
                 .setRequired(true)
                 .setUpdateable(true)
                 .setNativeName(ATTR_CLIENT_ID)
+                .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
                 .build());
 
         // Common Attributes
