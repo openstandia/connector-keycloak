@@ -168,6 +168,24 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
                         attrs = new HashMap();
                     }
 
+                    // First, we need to remove the attributes
+                    if (delta.getValuesToRemove() != null) {
+                        for (Object v : delta.getValuesToRemove()) {
+                            String kv = v.toString();
+                            int index = kv.indexOf("=");
+                            if (index <= 0) {
+                                throw new InvalidAttributeValueException("The attribute is invalid format: " + kv);
+                            }
+                            String key = kv.substring(0, index);
+
+                            if (schema.clientSchema.containsKey(key)) {
+                                LOGGER.ok("Ignore removing attributes because it's configured attribute");
+                                continue;
+                            }
+
+                            attrs.remove(key);
+                        }
+                    }
                     if (delta.getValuesToAdd() != null) {
                         for (Object v : delta.getValuesToAdd()) {
                             String kv = v.toString();
@@ -184,23 +202,6 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
                             }
 
                             attrs.put(key, Arrays.asList(value.split("##")));
-                        }
-                    }
-                    if (delta.getValuesToRemove() != null) {
-                        for (Object v : delta.getValuesToRemove()) {
-                            String kv = v.toString();
-                            int index = kv.indexOf("=");
-                            if (index <= 0) {
-                                throw new InvalidAttributeValueException("The attribute is invalid format: " + kv);
-                            }
-                            String key = kv.substring(0, index);
-
-                            if (schema.clientSchema.containsKey(key)) {
-                                LOGGER.ok("Ignore removing attributes because it's configured attribute");
-                                continue;
-                            }
-
-                            attrs.remove(key);
                         }
                     }
 
