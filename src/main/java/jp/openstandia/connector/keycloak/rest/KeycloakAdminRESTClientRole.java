@@ -156,7 +156,16 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
         try {
             for (AttributeDelta delta : modifications) {
                 if (delta.getName().equals(Name.NAME)) {
-                    current.setName(AttributeDeltaUtil.getAsStringValue(delta));
+                    String name = AttributeDeltaUtil.getAsStringValue(delta);
+                    String[] split = name.split("/");
+
+                    if (split.length != 2) {
+                        throw new InvalidAttributeValueException("Invalid clientRole name format." +
+                                " It must be <clientUUID>/<clientRoleName>. name: " + name);
+                    }
+
+                    current.setContainerId(split[0]);
+                    current.setName(split[1]);
 
                 } else if (delta.getName().equals(ATTR_DESCRIPTION)) {
                     current.setDescription(AttributeDeltaUtil.getStringValue(delta));
