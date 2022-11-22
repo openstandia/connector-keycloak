@@ -18,6 +18,7 @@ package jp.openstandia.connector.keycloak.rest;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
+import jp.openstandia.connector.keycloak.common.Transformation;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
@@ -27,7 +28,9 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.GroupResource;
 import org.keycloak.admin.client.resource.GroupsResource;
 import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.representations.idm.ClientMappingsRepresentation;
 import org.keycloak.representations.idm.GroupRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
 
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Response;
@@ -126,6 +129,8 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         GroupsResource resource = groups(realmName);
         GroupRepresentation current;
         String newParentGroupId = null;
+        Map<String, List<RoleRepresentation>> clientRolesToAdd = new HashMap<>();
+        Map<String, List<RoleRepresentation>> clientRolesToRemove = new HashMap<>();
 
         try {
             GroupResource group = resource.group(uid.getUidValue());
@@ -141,6 +146,30 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
                 } else if (delta.getName().equals(ATTR_PARENT_GROUP)) {
                     newParentGroupId = AttributeDeltaUtil.getAsStringValue(delta);
+
+                } else if (delta.getName().equals(ATTR_GROUP_ROLES)) {
+                    if (delta.getValuesToAdd() != null) {
+                        List<String> rolesToAddDelta = delta.getValuesToAdd().stream()
+                                .map(r -> r.toString())
+                                .collect(Collectors.toList());
+
+                        clientRolesToAdd = Transformation.groupsToClientRoleMap(rolesToAddDelta,
+                                "/",
+                                0,
+                                1,
+                                realm(realmName));
+
+                    }
+                    if (delta.getValuesToRemove() != null) {
+                        List<String> rolesToRemoveDelta = delta.getValuesToRemove().stream()
+                                .map(r -> r.toString())
+                                .collect(Collectors.toList());
+                        clientRolesToRemove = Transformation.groupsToClientRoleMap(rolesToRemoveDelta,
+                                "/",
+                                0,
+                                1,
+                                realm(realmName));
+                    }
 
                 } else if (schema.isGroupSchema(delta)) {
                     if (schema.isMultiValuedGroupSchema(delta)) {
@@ -206,6 +235,28 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 // From sub => sub with different parent
                 groups(realmName).group(newParentGroupId).subGroup(current);
             }
+        }
+
+        if (!clientRolesToAdd.isEmpty()) {
+            clientRolesToAdd.forEach((client, roleList) -> {
+                try {
+                    groups(realmName).group(current.getId()).roles().clientLevel(client).add(roleList);
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Assignment of client roles to group failed. client: {0}, role: {1}, groupId: {2}, name: {3}",
+                            client, roleList, current.getId(), current.getName());
+                }
+            });
+        }
+
+        if (!clientRolesToRemove.isEmpty()) {
+            clientRolesToRemove.forEach((client, roleList) -> {
+                try {
+                    groups(realmName).group(current.getId()).roles().clientLevel(client).remove(roleList);
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Unassignment of client roles of group failed. client: {0}, role: {1}, groupId: {2}, name: {3}",
+                            client, roleList, current.getId(), current.getName());
+                }
+            });
         }
     }
 
@@ -354,6 +405,14 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             ab.setName(ATTR_PARENT_GROUP).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
             ab.addValue(Collections.EMPTY_LIST);
             builder.addAttribute(ab.build());
+
+            // Suppress fetching roles
+            LOGGER.ok("[{0}] Suppress fetching groups because return partial attribute values is requested", instanceName);
+
+            AttributeBuilder ab_roles = new AttributeBuilder();
+            ab_roles.setName(ATTR_GROUP_ROLES).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
+            ab_roles.addValue(Collections.EMPTY_LIST);
+            builder.addAttribute(ab_roles.build());
         } else {
             if (attributesToGet == null) {
                 // Suppress fetching groups default
@@ -379,6 +438,23 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                     if (parentGroupId != null) {
                         builder.addAttribute(ATTR_PARENT_GROUP, parentGroupId);
                     }
+                }
+            }
+            if (shouldReturn(attributesToGet, ATTR_GROUP_ROLES)) {
+                // Fetch roles
+                LOGGER.ok("[{0}] Fetching roles because attributes to get is requested", instanceName);
+
+                Map<String, ClientMappingsRepresentation> roles = groups(realmName).group(rep.getId()).roles().getAll().getClientMappings();
+                if(roles != null) {
+                    List<String> roleMappings = new ArrayList<>();
+
+                    roles.forEach((client, roleRep) -> {
+                        roleRep.getMappings().stream().forEach(m -> {
+                            roleMappings.add(roleRep.getId() + "/" + m.getName());
+                        });
+                    });
+
+                    builder.addAttribute(ATTR_GROUP_ROLES, roleMappings);
                 }
             }
         }

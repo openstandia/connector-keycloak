@@ -85,14 +85,21 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         // grant_type=password mode
         if (configuration.getUsername() != null && configuration.getPassword() != null) {
             configuration.getPassword().access(s -> {
-                adminClient = KeycloakBuilder.builder()
+                KeycloakBuilder adminClientBuilder = KeycloakBuilder.builder()
                         .serverUrl(configuration.getServerUrl())
                         .realm(configuration.getRealmName())
                         .grantType("password")
                         .username(configuration.getUsername())
                         .password(String.valueOf(s))
-                        .clientId(configuration.getClientId())
-                        .resteasyClient(resteasyClientBuilder.build())
+                        .clientId(configuration.getClientId());
+
+                if(configuration.getClientSecret() != null) {
+                    configuration.getClientSecret().access(cs -> {
+                        adminClientBuilder.clientSecret(String.valueOf(cs));
+                    });
+                }
+
+                adminClient = adminClientBuilder.resteasyClient(resteasyClientBuilder.build())
                         .build();
             });
         } else if (configuration.getClientSecret() != null) {
