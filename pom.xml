@@ -180,7 +180,7 @@
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-admin-client</artifactId>
-            <version>18.0.0</version>
+            <version>20.0.2</version>
 <!--            <exclusions>-->
 <!--                <exclusion>-->
 <!--                    <groupId>org.slf4j</groupId>-->

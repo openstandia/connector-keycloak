@@ -22,7 +22,8 @@ import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
-import org.jboss.resteasy.spi.ResteasyProviderFactory;
+import org.jboss.resteasy.client.jaxrs.internal.ResteasyClientBuilderImpl;
+import org.jboss.resteasy.core.providerfactory.ResteasyProviderFactoryImpl;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
@@ -58,10 +59,10 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
             RuntimeDelegate.getInstance();
         } catch (RuntimeException e) {
             // Set the implementation directly as a workaround
-            RuntimeDelegate.setInstance(new ResteasyProviderFactory());
+            RuntimeDelegate.setInstance(new ResteasyProviderFactoryImpl());
         }
 
-        ResteasyClientBuilder resteasyClientBuilder = new ResteasyClientBuilder();
+        ResteasyClientBuilder resteasyClientBuilder = new ResteasyClientBuilderImpl();
         resteasyClientBuilder.connectionPoolSize(20);
 
         // HTTP proxy configuration
