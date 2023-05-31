@@ -37,6 +37,7 @@ import javax.ws.rs.BadRequestException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Response;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static jp.openstandia.connector.keycloak.KeycloakUserHandler.*;
@@ -116,6 +117,8 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 }
             }
         }
+
+        invokeExecuteEmailActions(realmName, uuid);
 
         return new Uid(uuid, new Name(newUser.getUsername()));
     }
@@ -435,6 +438,39 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
         // NotFound
         LOGGER.warn("[{0}] Unknown username: {1}", instanceName, name.getNameValue());
+    }
+
+    /**
+     * If Required Actions on User Create are present in configuration, invoke execute-actions-email PUT endpoint.
+     * If redirectUri is also present in configuration, it is also included in the PUT request as a query parameter.
+     * Both configuration items are optional.  If Required Actions on User Create do not seem to be populated with
+     * meaningful String data, no action will be taken.
+     * @param realmName Realm Name related to the newly created user
+     * @param userId The user id (UUID) for the newly created user
+     */
+    private void invokeExecuteEmailActions(final String realmName, final String userId) {
+        if (configuration.getRequiredActionsOnUserCreate() != null && configuration.getRequiredActionsOnUserCreate().length > 0) {
+            List<String> requiredActionsList =
+                    Arrays.stream(configuration.getRequiredActionsOnUserCreate())
+                            .distinct()
+                            .filter(Objects::nonNull)
+                            .filter(Predicate.not(String::isBlank))
+                            .collect(Collectors.toList());
+
+            if (!requiredActionsList.isEmpty()) {
+                if (configuration.getRedirectUri() != null && (!configuration.getRedirectUri().isBlank())) {
+                    LOGGER.ok("Invoking Execute Actions Email with actions [{0}] and redirect URI [{1}] following creation of user id [{2}]",
+                            requiredActionsList, configuration.getRedirectUri(), userId);
+                    users(realmName).get(userId).executeActionsEmail(configuration.getClientId(),
+                            configuration.getRedirectUri(), requiredActionsList);
+                } else {
+                    LOGGER.ok("Invoking Execute Actions Email with actions [{0}] following creation of user id [{1}]",
+                            requiredActionsList.toArray(), userId);
+                    users(realmName).get(userId).executeActionsEmail(requiredActionsList);
+                }
+                LOGGER.ok("Completed Execute Actions Email submission for user id [{0}]", userId);
+            }
+        }
     }
 
     private ConnectorObject toConnectorObject(KeycloakSchema schema, String realmName, UserRepresentation user,

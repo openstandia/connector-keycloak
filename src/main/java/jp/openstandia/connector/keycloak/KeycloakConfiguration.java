@@ -49,6 +49,9 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     private String httpProxyUser;
     private GuardedString httpProxyPassword;
 
+    private String[] requiredActionsOnUserCreate;
+    private String redirectUri;
+
     @ConfigurationProperty(
             order = 1,
             displayMessageKey = "Keycloak Server URL",
@@ -321,6 +324,34 @@ public class KeycloakConfiguration extends AbstractConfiguration {
 
     public void setHttpProxyPassword(GuardedString httpProxyPassword) {
         this.httpProxyPassword = httpProxyPassword;
+    }
+
+    @ConfigurationProperty(
+            order = 20,
+            displayMessageKey = "Required Actions",
+            helpMessageKey = "Required Actions to submit to Keycloak Execute Actions Email endpoint following User creation",
+            required = false,
+            confidential = false)
+    public String[] getRequiredActionsOnUserCreate() {
+        return requiredActionsOnUserCreate;
+    }
+
+    public void setRequiredActionsOnUserCreate(String[] actions) {
+        this.requiredActionsOnUserCreate = actions;
+    }
+
+    @ConfigurationProperty(
+            order = 21,
+            displayMessageKey = "Redirect URI",
+            helpMessageKey = "Redirect URI that is submitted along with Required Actions on User Create",
+            required = false,
+            confidential = false)
+    public String getRedirectUri() {
+        return redirectUri;
+    }
+
+    public void setRedirectUri(String uri) {
+        this.redirectUri = uri;
     }
 
     @Override
