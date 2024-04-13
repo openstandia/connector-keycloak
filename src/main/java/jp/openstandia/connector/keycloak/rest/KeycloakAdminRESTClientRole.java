@@ -31,7 +31,7 @@ import org.keycloak.admin.client.resource.RolesResource;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 
-import javax.ws.rs.NotFoundException;
+import jakarta.ws.rs.NotFoundException;
 import java.util.*;
 
 import static jp.openstandia.connector.keycloak.KeycloakClientHandler.ATTR_CLIENT_UUID;
