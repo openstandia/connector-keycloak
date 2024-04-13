@@ -174,43 +174,209 @@
     </build>
 
     <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.keycloak</groupId>
+                <artifactId>keycloak-admin-client</artifactId>
+                <version>24.0.2</version>
+            </dependency>
+        </dependencies>
     </dependencyManagement>
 
     <dependencies>
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-admin-client</artifactId>
-            <version>20.0.2</version>
-<!--            <exclusions>-->
-<!--                <exclusion>-->
-<!--                    <groupId>org.slf4j</groupId>-->
-<!--                    <artifactId>slf4j-api</artifactId>-->
-<!--                </exclusion>-->
-<!--            </exclusions>-->
         </dependency>
     </dependencies>
 
     <profiles>
         <profile>
-            <id>midpoint</id>
+            <id>midpoint48</id>
             <dependencies>
                 <dependency>
                     <groupId>com.evolveum.midpoint.gui</groupId>
                     <artifactId>admin-gui</artifactId>
-                    <version>4.0.2</version>
-                    <type>jar</type>
-                    <classifier>classes</classifier>
+                    <version>4.8.2</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>org.testng</groupId>
                     <artifactId>testng</artifactId>
-                    <version>6.8</version>
                     <scope>test</scope>
                     <exclusions>
                         <exclusion>
                             <groupId>org.yaml</groupId>
                             <artifactId>snakeyaml</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework</artifactId>
+                    <version>1.5.2.0</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework-internal</artifactId>
+                    <version>1.5.2.0</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework-contract</artifactId>
+                    <version>1.5.2.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>net.bytebuddy</groupId>
+                    <artifactId>byte-buddy</artifactId>
+                    <version>1.14.9</version>
+                    <scope>provided</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>midpoint44</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.evolveum.midpoint.gui</groupId>
+                    <artifactId>admin-gui</artifactId>
+                    <type>jar</type>
+                    <classifier>classes</classifier>
+                    <version>4.4.8</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.testng</groupId>
+                    <artifactId>testng</artifactId>
+                    <scope>test</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.yaml</groupId>
+                            <artifactId>snakeyaml</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework</artifactId>
+                    <version>1.5.1.10</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework-internal</artifactId>
+                    <version>1.5.1.10</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework-contract</artifactId>
+                    <version>1.5.1.10</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.keycloak</groupId>
+                    <artifactId>keycloak-admin-client</artifactId>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-client</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-multipart-provider</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-jackson2-provider</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-jaxb-provider</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>midpoint40</id>
+            <repositories>
+                <repository>
+                    <id>evolveum-nexus-releases</id>
+                    <name>Internal Releases</name>
+                    <url>https://nexus.evolveum.com/nexus/content/repositories/releases/</url>
+                </repository>
+                <repository>
+                    <id>evolveum-nexus-snapshots</id>
+                    <name>Internal Releases</name>
+                    <url>https://nexus.evolveum.com/nexus/content/repositories/snapshots/</url>
+                </repository>
+                <repository>
+                    <!-- Jasper references old http repository which fails with 308. -->
+                    <id>jaspersoft-third-party</id>
+                    <url>https://jaspersoft.jfrog.io/jaspersoft/third-party-ce-artifacts</url>
+                </repository>
+            </repositories>
+            <dependencies>
+                <dependency>
+                    <groupId>com.evolveum.midpoint.gui</groupId>
+                    <artifactId>admin-gui</artifactId>
+                    <type>jar</type>
+                    <classifier>classes</classifier>
+                    <version>4.0.4</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.testng</groupId>
+                    <artifactId>testng</artifactId>
+                    <scope>test</scope>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.yaml</groupId>
+                            <artifactId>snakeyaml</artifactId>
+                        </exclusion>
+                    </exclusions>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework</artifactId>
+                    <version>1.5.0.10</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework-internal</artifactId>
+                    <version>1.5.0.10</version>
+                    <scope>provided</scope>
+                </dependency>
+                <dependency>
+                    <groupId>net.tirasa.connid</groupId>
+                    <artifactId>connector-framework-contract</artifactId>
+                    <version>1.5.0.10</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.keycloak</groupId>
+                    <artifactId>keycloak-admin-client</artifactId>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-client</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-multipart-provider</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-jackson2-provider</artifactId>
+                        </exclusion>
+                        <exclusion>
+                            <groupId>org.jboss.resteasy</groupId>
+                            <artifactId>resteasy-jaxb-provider</artifactId>
                         </exclusion>
                     </exclusions>
                 </dependency>

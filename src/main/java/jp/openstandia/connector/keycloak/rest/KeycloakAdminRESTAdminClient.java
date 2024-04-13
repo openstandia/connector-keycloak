@@ -29,8 +29,8 @@ import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.info.ServerInfoRepresentation;
 
-import javax.ws.rs.ProcessingException;
-import javax.ws.rs.ext.RuntimeDelegate;
+import jakarta.ws.rs.ProcessingException;
+import jakarta.ws.rs.ext.RuntimeDelegate;
 
 import static jp.openstandia.connector.keycloak.KeycloakUtils.getRootCause;
 
@@ -57,7 +57,7 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
 
         try {
             RuntimeDelegate.getInstance();
-        } catch (RuntimeException e) {
+        } catch (Throwable t) {
             // Set the implementation directly as a workaround
             RuntimeDelegate.setInstance(new ResteasyProviderFactoryImpl());
         }
