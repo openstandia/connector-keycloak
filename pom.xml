@@ -60,7 +60,7 @@
     <properties>
         <connectorPackage>jp.openstandia.connector.keycloak</connectorPackage>
         <connectorClass>KeycloakConnector</connectorClass>
-        <java.version>17</java.version>
+        <java.version>11</java.version>
     </properties>
 
     <repositories>
