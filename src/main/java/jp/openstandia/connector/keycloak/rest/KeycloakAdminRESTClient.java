@@ -15,6 +15,8 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
@@ -30,8 +32,6 @@ import org.keycloak.admin.client.resource.ClientsResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.ClientRepresentation;
 
-import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -51,7 +51,7 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
 
     private final String instanceName;
     private final KeycloakConfiguration configuration;
-    private Keycloak adminClient;
+    private final Keycloak adminClient;
 
     public KeycloakAdminRESTClient(String instanceName, KeycloakConfiguration configuration, Keycloak adminClient) {
         this.instanceName = instanceName;
@@ -148,7 +148,7 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
                 // Configured Attributes
                 Map<String, String> attrs = newClient.getAttributes();
                 if (attrs == null) {
-                    attrs = new HashMap();
+                    attrs = new HashMap<>();
                 }
 
                 if (schema.isClientSchema(attr)) {
@@ -262,7 +262,7 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
                     // Configured Attributes
                     Map<String, String> attrs = current.getAttributes();
                     if (attrs == null) {
-                        attrs = new HashMap();
+                        attrs = new HashMap<>();
                     }
 
                     if (schema.isClientSchema(delta)) {
@@ -427,7 +427,9 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
 
         // openid-connect
         if (shouldReturn(attributesToGet, ATTR_SECRET)) {
-            builder.addAttribute(ATTR_SECRET, rep.getSecret());
+            if (rep.getSecret() != null) {
+                builder.addAttribute(ATTR_SECRET, new GuardedString(rep.getSecret().toCharArray()));
+            }
         }
         if (shouldReturn(attributesToGet, ATTR_PUBLIC_CLIENT)) {
             builder.addAttribute(ATTR_PUBLIC_CLIENT, rep.isPublicClient());

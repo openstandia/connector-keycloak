@@ -33,10 +33,10 @@ public class KeycloakSchema {
     private final KeycloakConfiguration configuration;
     private final KeycloakClient client;
 
-    public String version;
-    public int majorVersion;
-    public int minorVersion;
-    public int patchVersion;
+    public final String version;
+    public final int majorVersion;
+    public final int minorVersion;
+    public final int patchVersion;
 
     public final Schema schema;
     public final Map<String, AttributeInfo> userSchema;
@@ -50,16 +50,18 @@ public class KeycloakSchema {
 
         SchemaBuilder schemaBuilder = new SchemaBuilder(KeycloakConnector.class);
 
-        ObjectClassInfo userSchemaInfo = KeycloakUserHandler.getUserSchema(getUserAttributes());
+        ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry = new ServiceRegistry<>(ObjectClassSchemaCreatorCustomizer.class);
+
+        ObjectClassInfo userSchemaInfo = new UserObjectClassSchemaCreator(serviceRegistry).createSchema(getUserAttributes());
         schemaBuilder.defineObjectClass(userSchemaInfo);
 
-        ObjectClassInfo groupSchemaInfo = KeycloakGroupHandler.getGroupSchema(getGroupAttributes());
+        ObjectClassInfo groupSchemaInfo = new GroupObjectClassSchemaCreator(serviceRegistry).createSchema(getGroupAttributes());
         schemaBuilder.defineObjectClass(groupSchemaInfo);
 
-        ObjectClassInfo clientSchemaInfo = KeycloakClientHandler.getClientSchema(getClientAttributes());
+        ObjectClassInfo clientSchemaInfo = new ClientObjectClassSchemaCreator(serviceRegistry).createSchema(getClientAttributes());
         schemaBuilder.defineObjectClass(clientSchemaInfo);
 
-        ObjectClassInfo clientRoleSchemaInfo = KeycloakClientRoleHandler.getSchema(new String[]{});
+        ObjectClassInfo clientRoleSchemaInfo = new ClientRoleObjectClassSchemaCreator(serviceRegistry).createSchema(new String[]{});
         schemaBuilder.defineObjectClass(clientRoleSchemaInfo);
 
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildAttributesToGet(), SearchOp.class);
@@ -93,24 +95,10 @@ public class KeycloakSchema {
         this.clientRoleSchema = Collections.unmodifiableMap(clientRoleSchemaMap);
 
         this.version = client.getVersion();
-
-        parseVersion();
-    }
-
-    private void parseVersion() {
-        try {
-            String[] s = version.split("\\.");
-            this.majorVersion = Integer.parseInt(s[0]);
-            this.minorVersion = Integer.parseInt(s[1]);
-            if (s[2].contains("-")) {
-                String ps = s[2].substring(0, s[2].indexOf("-"));
-                this.patchVersion = Integer.parseInt(ps);
-            } else {
-                this.patchVersion = Integer.parseInt(s[2]);
-            }
-        } catch (NumberFormatException | IndexOutOfBoundsException e) {
-            throw new ConnectorException(String.format("Keycloak returns unexpected version number: %s", version));
-        }
+        TempVersion v = TempVersion.parse(this.version);
+        this.majorVersion = v.majorVersion;
+        this.minorVersion = v.minorVersion;
+        this.patchVersion = v.patchVersion;
     }
 
     private String[] getUserAttributes() {
@@ -195,5 +183,35 @@ public class KeycloakSchema {
 
     public AttributeInfo getClientSchema(String attributeName) {
         return clientSchema.get(attributeName);
+    }
+
+    private static final class TempVersion {
+        public final int majorVersion;
+        public final int minorVersion;
+        public final int patchVersion;
+
+        private TempVersion(int majorVersion, int minorVersion, int patchVersion) {
+            this.majorVersion = majorVersion;
+            this.minorVersion = minorVersion;
+            this.patchVersion = patchVersion;
+        }
+
+        private static TempVersion parse(String value) {
+            try {
+                String[] s = value.split("\\.");
+                int majorVersion = Integer.parseInt(s[0]);
+                int minorVersion = Integer.parseInt(s[1]);
+                int patchVersion;
+                if (s[2].contains("-")) {
+                    String ps = s[2].substring(0, s[2].indexOf("-"));
+                    patchVersion = Integer.parseInt(ps);
+                } else {
+                    patchVersion = Integer.parseInt(s[2]);
+                }
+                return new TempVersion(majorVersion, minorVersion, patchVersion);
+            } catch (NumberFormatException | IndexOutOfBoundsException e) {
+                throw new ConnectorException(String.format("Keycloak returns unexpected version number: %s", value));
+            }
+        }
     }
 }

@@ -15,9 +15,12 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
+import jp.openstandia.connector.keycloak.ServiceRegistry;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
@@ -29,8 +32,6 @@ import org.keycloak.admin.client.resource.GroupsResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.GroupRepresentation;
 
-import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -49,12 +50,19 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
     private final String instanceName;
     private final KeycloakConfiguration configuration;
-    private Keycloak adminClient;
+    private final Keycloak adminClient;
+    private final List<KeycloakGroupCustomizer> customizers;
 
-    public KeycloakAdminRESTGroup(String instanceName, KeycloakConfiguration configuration, Keycloak adminClient) {
+    public KeycloakAdminRESTGroup(
+            String instanceName,
+            KeycloakConfiguration configuration,
+            Keycloak adminClient,
+            ServiceRegistry<KeycloakGroupCustomizer> serviceRegistry
+    ) {
         this.instanceName = instanceName;
         this.configuration = configuration;
         this.adminClient = adminClient;
+        this.customizers = serviceRegistry.getServices();
     }
 
     private RealmResource realm(String realmName) {
@@ -108,9 +116,9 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 if (schema.isMultiValuedGroupSchema(attr)) {
                     Map<String, List<String>> attrs = newGroup.getAttributes();
                     if (attrs == null) {
-                        attrs = new HashMap();
+                        attrs = new HashMap<>();
                     }
-                    attrs.put(attr.getName(), attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList()));
+                    attrs.put(attr.getName(), attr.getValue().stream().map(Object::toString).collect(Collectors.toList()));
 
                 } else {
                     newGroup.singleAttribute(attr.getName(), AttributeUtil.getStringValue(attr));
@@ -146,7 +154,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                     if (schema.isMultiValuedGroupSchema(delta)) {
                         Map<String, List<String>> attrs = current.getAttributes();
                         if (attrs == null) {
-                            attrs = new HashMap();
+                            attrs = new HashMap<>();
                         }
                         List<String> values = attrs.getOrDefault(delta.getName(), new ArrayList<>());
                         attrs.put(delta.getName(), values);
@@ -207,6 +215,9 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 groups(realmName).group(newParentGroupId).subGroup(current);
             }
         }
+
+        customizers.forEach((customizer) ->
+                customizer.customizeUpdateGroup(schema, realmName, uid, modifications, options, current, adminClient));
     }
 
     private boolean isTopGroup(GroupRepresentation rep) {
@@ -242,7 +253,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         while (total < count) {
             List<GroupRepresentation> results = groups.groups("", start, queryPageSize, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 
@@ -297,7 +308,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
             List<GroupRepresentation> results = groups.groups(name.getNameValue(), start, end, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 
@@ -318,20 +329,20 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
     }
 
 
-    private ConnectorObject toConnectorObject(KeycloakSchema schema, String realmName, GroupRepresentation rep,
+    private ConnectorObject toConnectorObject(KeycloakSchema schema, String realmName, GroupRepresentation group,
                                               Set<String> attributesToGet, boolean allowPartialAttributeValues, int queryPageSize) {
         final ConnectorObjectBuilder builder = new ConnectorObjectBuilder()
                 .setObjectClass(GROUP_OBJECT_CLASS)
                 // Always returns "id"
-                .setUid(rep.getId())
+                .setUid(group.getId())
                 // Always returns "name"
-                .setName(rep.getName());
+                .setName(group.getName());
 
-        builder.addAttribute(ATTR_PATH, rep.getPath());
+        builder.addAttribute(ATTR_PATH, group.getPath());
 
-        Map<String, List<String>> attributes = rep.getAttributes();
+        Map<String, List<String>> attributes = group.getAttributes();
         if (attributes != null) {
-            for (Map.Entry<String, List<String>> entry : rep.getAttributes().entrySet()) {
+            for (Map.Entry<String, List<String>> entry : group.getAttributes().entrySet()) {
                 String a = entry.getKey();
                 AttributeInfo attributeInfo = schema.getGroupSchema(a);
 
@@ -366,7 +377,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 // Examples of the path value:
                 // root group "foo" => /foo
                 // sub group "bar" => /foo/bar
-                String path = rep.getPath();
+                String path = group.getPath();
                 String[] pathList = path.split("/");
 
                 String parentGroupName = null;
@@ -375,13 +386,25 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 }
 
                 if (parentGroupName != null) {
-                    String parentGroupId = findParentGroupByName(realmName, parentGroupName, rep.getId(), queryPageSize);
+                    String parentGroupId = findParentGroupByName(realmName, parentGroupName, group.getId(), queryPageSize);
                     if (parentGroupId != null) {
                         builder.addAttribute(ATTR_PARENT_GROUP, parentGroupId);
                     }
                 }
             }
         }
+
+        customizers.forEach((customizer) -> {
+            customizer.customizeToConnectorObject(
+                    builder,
+                    instanceName,
+                    schema,
+                    realmName,
+                    group,
+                    attributesToGet,
+                    allowPartialAttributeValues,
+                    adminClient);
+        });
 
         return builder.build();
     }
@@ -400,7 +423,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
             List<GroupRepresentation> results = groups.groups(parentGroupName, start, end, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 

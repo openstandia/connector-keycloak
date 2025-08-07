@@ -16,8 +16,11 @@
 package jp.openstandia.connector.keycloak.rest;
 
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
+import jakarta.ws.rs.ProcessingException;
+import jakarta.ws.rs.ext.RuntimeDelegate;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
+import jp.openstandia.connector.keycloak.ServiceRegistry;
 import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
@@ -28,9 +31,6 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.info.ServerInfoRepresentation;
-
-import jakarta.ws.rs.ProcessingException;
-import jakarta.ws.rs.ext.RuntimeDelegate;
 
 import static jp.openstandia.connector.keycloak.KeycloakUtils.getRootCause;
 
@@ -109,8 +109,11 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
             });
         }
 
-        this.user = new KeycloakAdminRESTUser(instanceName, configuration, adminClient);
-        this.group = new KeycloakAdminRESTGroup(instanceName, configuration, adminClient);
+        ServiceRegistry<KeycloakUserCustomizer> serviceRegistryKeycloakUserCustomizer = new ServiceRegistry<>(KeycloakUserCustomizer.class);
+        ServiceRegistry<KeycloakGroupCustomizer> serviceRegistryKeycloakGroupCustomizer = new ServiceRegistry<>(KeycloakGroupCustomizer.class);
+
+        this.user = new KeycloakAdminRESTUser(instanceName, configuration, adminClient, serviceRegistryKeycloakUserCustomizer);
+        this.group = new KeycloakAdminRESTGroup(instanceName, configuration, adminClient, serviceRegistryKeycloakGroupCustomizer);
         this.client = new KeycloakAdminRESTClient(instanceName, configuration, adminClient);
         this.clientRole = new KeycloakAdminRESTClientRole(instanceName, configuration, adminClient);
     }

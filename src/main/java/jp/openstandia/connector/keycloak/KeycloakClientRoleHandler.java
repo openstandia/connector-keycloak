@@ -52,43 +52,6 @@ public class KeycloakClientRoleHandler extends AbstractKeycloakHandler {
         super(instanceName, configuration, client, schema);
     }
 
-    public static ObjectClassInfo getSchema(String[] attributes) {
-        ObjectClassInfoBuilder builder = new ObjectClassInfoBuilder();
-        builder.setType(CLIENT_ROLE_OBJECT_CLASS.getObjectClassValue());
-
-        // __UID__
-        builder.addAttributeInfo(AttributeInfoBuilder.define(Uid.NAME)
-                .setRequired(false) // Must be optional. It is not present for create operations
-                .setCreateable(false)
-                .setUpdateable(false)
-                .setNativeName(ATTR_CLIENT_ROLE_ID)
-                .build());
-
-        // __NAME__
-        builder.addAttributeInfo(AttributeInfoBuilder.define(Name.NAME)
-                .setRequired(true)
-                .setUpdateable(true)
-                .setNativeName(ATTR_NAME)
-                .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
-                .build());
-
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_DESCRIPTION)
-                .setRequired(false)
-                .build());
-
-        // Attributes
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_ATTRIBUTES)
-                .setRequired(false)
-                .setMultiValued(true)
-                .build());
-
-        ObjectClassInfo info = builder.build();
-
-        LOGGER.info("The constructed clientRole core schema: {0}", info);
-
-        return info;
-    }
-
     /**
      * @param attributes
      * @return

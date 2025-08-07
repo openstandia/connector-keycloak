@@ -36,7 +36,7 @@ public class KeycloakClientHandler extends AbstractKeycloakHandler {
     private static final Log LOGGER = Log.getLog(KeycloakClientHandler.class);
 
     // Unique and changeable within the keycloak realm
-    private static final String ATTR_CLIENT_ID = "clientId";
+    public static final String ATTR_CLIENT_ID = "clientId";
 
     // Unique and unchangeable within the keycloak realm.
     // Don't use "id" here because it conflicts midpoint side.
@@ -70,120 +70,6 @@ public class KeycloakClientHandler extends AbstractKeycloakHandler {
     public KeycloakClientHandler(String instanceName, KeycloakConfiguration configuration, KeycloakClient client,
                                  KeycloakSchema schema) {
         super(instanceName, configuration, client, schema);
-    }
-
-    public static ObjectClassInfo getClientSchema(String[] attributes) {
-        ObjectClassInfoBuilder builder = new ObjectClassInfoBuilder();
-        builder.setType(CLIENT_OBJECT_CLASS.getObjectClassValue());
-
-        // __UID__
-        builder.addAttributeInfo(AttributeInfoBuilder.define(Uid.NAME)
-                .setRequired(false) // Must be optional. It is not present for create operations
-                .setCreateable(false)
-                .setUpdateable(false)
-                .setNativeName(ATTR_CLIENT_UUID)
-                .build());
-
-        // __NAME__
-        builder.addAttributeInfo(AttributeInfoBuilder.define(Name.NAME)
-                .setRequired(true)
-                .setUpdateable(true)
-                .setNativeName(ATTR_CLIENT_ID)
-                .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
-                .build());
-
-        // Common Attributes
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_PROTOCOL)
-                .setRequired(true)
-                .setCreateable(true)
-                .setUpdateable(false)
-                .build());
-//        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_ENABLED)
-//                .setRequired(true)
-//                .setType(Boolean.class)
-//                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_REDIRECT_URIS)
-                .setRequired(false)
-                .setMultiValued(true)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_NAME)
-                .setRequired(false)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_DESCRIPTION)
-                .setRequired(false)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_ADMIN_URL)
-                .setRequired(false)
-                .build());
-
-        // openid-connect
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_SECRET)
-                .setRequired(false)
-                .setType(GuardedString.class)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_PUBLIC_CLIENT)
-                .setRequired(false)
-                .setType(Boolean.class)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_STANDARD_FLOW_ENABLED)
-                .setRequired(false)
-                .setType(Boolean.class)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_IMPLICIT_FLOW_ENABLED)
-                .setRequired(false)
-                .setType(Boolean.class)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_DIRECT_ACCESS_GRANTS_ENABLED)
-                .setRequired(false)
-                .setType(Boolean.class)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_SERVICE_ACCOUNT_ENABLED)
-                .setRequired(false)
-                .setType(Boolean.class)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_BEARER_ONLY)
-                .setRequired(false)
-                .setType(Boolean.class)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_BASE_URL)
-                .setRequired(false)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_ROOT_URL)
-                .setRequired(false)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_ORIGIN)
-                .setRequired(false)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_WEB_ORIGINS)
-                .setRequired(false)
-                .setMultiValued(true)
-                .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_AUTHORIZATION_SERVICES_ENABLED)
-                .setRequired(false)
-                .setType(Boolean.class)
-                .build());
-
-        // __ENABLE__ attribute
-        builder.addAttributeInfo(OperationalAttributeInfos.ENABLE);
-
-        // Configured Attributes
-        for (String attr : attributes) {
-            builder.addAttributeInfo(AttributeInfoBuilder.define(attr)
-                    .setRequired(false)
-                    .build());
-        }
-
-        // Generic Attributes
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_ATTRIBUTES)
-                .setRequired(false)
-                .setMultiValued(true)
-                .build());
-
-        ObjectClassInfo info = builder.build();
-
-        LOGGER.info("The constructed client core schema: {0}", info);
-
-        return info;
     }
 
     /**

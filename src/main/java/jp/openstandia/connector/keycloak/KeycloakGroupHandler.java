@@ -35,7 +35,7 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
     private static final Log LOGGER = Log.getLog(KeycloakGroupHandler.class);
 
     // Unique and changeable within the keycloak realm
-    private static final String ATTR_GROUP_NAME = "name";
+    public static final String ATTR_GROUP_NAME = "name";
 
     // Unique and unchangeable within the keycloak realm.
     // Don't use "id" here because it conflicts midpoint side.
@@ -51,68 +51,6 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
     public KeycloakGroupHandler(String instanceName, KeycloakConfiguration configuration, KeycloakClient client,
                                 KeycloakSchema schema) {
         super(instanceName, configuration, client, schema);
-    }
-
-    public static ObjectClassInfo getGroupSchema(String[] attributes) {
-        ObjectClassInfoBuilder builder = new ObjectClassInfoBuilder();
-        builder.setType(GROUP_OBJECT_CLASS.getObjectClassValue());
-
-        // __UID__
-        builder.addAttributeInfo(AttributeInfoBuilder.define(Uid.NAME)
-                .setRequired(false) // Must be optional. It is not present for create operations
-                .setCreateable(false)
-                .setUpdateable(false)
-                .setNativeName(ATTR_GROUP_ID)
-                .build());
-
-        // __NAME__
-        builder.addAttributeInfo(AttributeInfoBuilder.define(Name.NAME)
-                .setRequired(true)
-                .setUpdateable(true)
-                .setNativeName(ATTR_GROUP_NAME)
-                .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
-                .build());
-
-        // path(read-only)
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_PATH)
-                .setRequired(false)
-                .setCreateable(false)
-                .setUpdateable(false)
-                .setSubtype(AttributeInfo.Subtypes.STRING_CASE_IGNORE)
-                .build());
-
-        // Attributes
-        for (String attr : attributes) {
-            String attrName;
-            boolean multivalued = false;
-
-            if (attr.contains(":")) {
-                String[] metadata = attr.split(":");
-                attrName = metadata[0];
-                multivalued = metadata[1].equalsIgnoreCase("multivalued");
-            } else {
-                attrName = attr;
-            }
-            builder.addAttributeInfo(
-                    AttributeInfoBuilder.define(attrName)
-                            .setRequired(false)
-                            .setUpdateable(true)
-                            .setMultiValued(multivalued)
-                            .build()
-            );
-        }
-
-        // Association
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_PARENT_GROUP)
-                .setMultiValued(false)
-                .setReturnedByDefault(false)
-                .build());
-
-        ObjectClassInfo groupSchemaInfo = builder.build();
-
-        LOGGER.info("The constructed Group core schema: {0}", groupSchemaInfo);
-
-        return groupSchemaInfo;
     }
 
     /**

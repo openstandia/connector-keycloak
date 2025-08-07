@@ -15,10 +15,10 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
-import jp.openstandia.connector.keycloak.KeycloakClient;
-import jp.openstandia.connector.keycloak.KeycloakConfiguration;
-import jp.openstandia.connector.keycloak.KeycloakSchema;
-import jp.openstandia.connector.keycloak.KeycloakUtils;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
+import jp.openstandia.connector.keycloak.*;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
@@ -33,9 +33,6 @@ import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.GroupRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -56,12 +53,19 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
     private final String instanceName;
     private final KeycloakConfiguration configuration;
-    private Keycloak adminClient;
+    private final Keycloak adminClient;
+    private final List<KeycloakUserCustomizer> customizers;
 
-    public KeycloakAdminRESTUser(String instanceName, KeycloakConfiguration configuration, Keycloak adminClient) {
+    public KeycloakAdminRESTUser(
+            String instanceName,
+            KeycloakConfiguration configuration,
+            Keycloak adminClient,
+            ServiceRegistry<KeycloakUserCustomizer> serviceRegistry
+    ) {
         this.instanceName = instanceName;
         this.configuration = configuration;
         this.adminClient = adminClient;
+        this.customizers = serviceRegistry.getServices();
     }
 
     private RealmResource realm(String realmName) {
@@ -160,7 +164,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 // Keycloak expects the group list as group path list.
                 // Because we set group id list here, we cant't use it for this API.
                 // See createUser method.
-                List<String> groups = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
+                List<String> groups = attr.getValue().stream().map(Object::toString).collect(Collectors.toList());
                 newUser.setGroups(groups);
 
             } else {
@@ -171,9 +175,9 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 if (schema.isMultiValuedUserSchema(attr)) {
                     Map<String, List<String>> attrs = newUser.getAttributes();
                     if (attrs == null) {
-                        attrs = new HashMap();
+                        attrs = new HashMap<>();
                     }
-                    attrs.put(attr.getName(), attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList()));
+                    attrs.put(attr.getName(), attr.getValue().stream().map(Object::toString).collect(Collectors.toList()));
 
                 } else {
                     newUser.singleAttribute(attr.getName(), AttributeUtil.getStringValue(attr));
@@ -266,7 +270,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                     if (schema.isMultiValuedUserSchema(delta)) {
                         Map<String, List<String>> attrs = current.getAttributes();
                         if (attrs == null) {
-                            attrs = new HashMap();
+                            attrs = new HashMap<>();
                         }
                         List<String> values = attrs.getOrDefault(delta.getName(), new ArrayList<>());
                         attrs.put(delta.getName(), values);
@@ -337,6 +341,18 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                         groupId, current.getId(), current.getUsername());
             }
         }
+
+        customizers.forEach((customizer) -> {
+            customizer.customizeUpdateUser(
+                    schema,
+                    realmName,
+                    uid,
+                    modifications,
+                    options,
+                    current,
+                    adminClient
+            );
+        });
     }
 
     @Override
@@ -368,7 +384,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         while (total < count) {
             List<UserRepresentation> results = users.search("", start, queryPageSize, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 
@@ -417,7 +433,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
             List<UserRepresentation> results = users.search(name.getNameValue(), start, end, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 
@@ -501,9 +517,21 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 LOGGER.ok("[{0}] Fetching groups because attributes to get is requested", instanceName);
 
                 List<GroupRepresentation> groups = users(realmName).get(user.getId()).groups();
-                builder.addAttribute(ATTR_GROUPS, groups.stream().map(g -> g.getId()).collect(Collectors.toList()));
+                builder.addAttribute(ATTR_GROUPS, groups.stream().map(GroupRepresentation::getId).collect(Collectors.toList()));
             }
         }
+
+        customizers.forEach((customizer) -> {
+            customizer.customizeToConnectorObject(
+                    builder,
+                    instanceName,
+                    schema,
+                    realmName,
+                    user,
+                    attributesToGet,
+                    allowPartialAttributeValues,
+                    adminClient);
+        });
 
         return builder.build();
     }
