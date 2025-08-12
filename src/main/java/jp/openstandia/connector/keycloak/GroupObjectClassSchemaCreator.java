@@ -5,8 +5,8 @@ import org.identityconnectors.framework.common.objects.*;
 public class GroupObjectClassSchemaCreator extends AbstractObjectClassSchemaCreator {
     private static final ObjectClass OBJECT_CLASS = KeycloakGroupHandler.GROUP_OBJECT_CLASS;
 
-    public GroupObjectClassSchemaCreator(ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry) {
-        super(OBJECT_CLASS, new GroupClassUserSchemaCreatorCustomizer(), serviceRegistry);
+    public GroupObjectClassSchemaCreator(CustomizerRegistry<ObjectClassSchemaCreatorCustomizer> customizerRegistry) {
+        super(OBJECT_CLASS, new GroupClassUserSchemaCreatorCustomizer(), customizerRegistry);
     }
 
     private static class GroupClassUserSchemaCreatorCustomizer extends AbstractObjectClassSchemaCreatorCustomizer {

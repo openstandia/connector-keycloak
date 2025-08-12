@@ -7,8 +7,8 @@ import static jp.openstandia.connector.keycloak.KeycloakClientRoleHandler.*;
 public class ClientRoleObjectClassSchemaCreator extends AbstractObjectClassSchemaCreator {
     private static final ObjectClass OBJECT_CLASS = CLIENT_ROLE_OBJECT_CLASS;
 
-    public ClientRoleObjectClassSchemaCreator(ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry) {
-        super(OBJECT_CLASS, new ObjectClassClientRoleSchemaCreatorCustomizer(), serviceRegistry);
+    public ClientRoleObjectClassSchemaCreator(CustomizerRegistry<ObjectClassSchemaCreatorCustomizer> customizerRegistry) {
+        super(OBJECT_CLASS, new ObjectClassClientRoleSchemaCreatorCustomizer(), customizerRegistry);
     }
 
     private static class ObjectClassClientRoleSchemaCreatorCustomizer extends AbstractObjectClassSchemaCreatorCustomizer {

@@ -20,7 +20,7 @@ import jakarta.ws.rs.core.Response;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
-import jp.openstandia.connector.keycloak.ServiceRegistry;
+import jp.openstandia.connector.keycloak.CustomizerRegistry;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
@@ -57,12 +57,12 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             String instanceName,
             KeycloakConfiguration configuration,
             Keycloak adminClient,
-            ServiceRegistry<KeycloakGroupCustomizer> serviceRegistry
+            CustomizerRegistry<KeycloakGroupCustomizer> customizerRegistry
     ) {
         this.instanceName = instanceName;
         this.configuration = configuration;
         this.adminClient = adminClient;
-        this.customizers = serviceRegistry.getServices();
+        this.customizers = customizerRegistry.getCustomizers();
     }
 
     private RealmResource realm(String realmName) {

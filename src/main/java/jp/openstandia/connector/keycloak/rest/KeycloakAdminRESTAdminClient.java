@@ -20,7 +20,7 @@ import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.ext.RuntimeDelegate;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
-import jp.openstandia.connector.keycloak.ServiceRegistry;
+import jp.openstandia.connector.keycloak.CustomizerRegistry;
 import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
@@ -109,11 +109,11 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
             });
         }
 
-        ServiceRegistry<KeycloakUserCustomizer> serviceRegistryKeycloakUserCustomizer = new ServiceRegistry<>(KeycloakUserCustomizer.class);
-        ServiceRegistry<KeycloakGroupCustomizer> serviceRegistryKeycloakGroupCustomizer = new ServiceRegistry<>(KeycloakGroupCustomizer.class);
+        CustomizerRegistry<KeycloakUserCustomizer> customizerRegistryKeycloakUserCustomizer = new CustomizerRegistry<>(KeycloakUserCustomizer.class);
+        CustomizerRegistry<KeycloakGroupCustomizer> customizerRegistryKeycloakGroupCustomizer = new CustomizerRegistry<>(KeycloakGroupCustomizer.class);
 
-        this.user = new KeycloakAdminRESTUser(instanceName, configuration, adminClient, serviceRegistryKeycloakUserCustomizer);
-        this.group = new KeycloakAdminRESTGroup(instanceName, configuration, adminClient, serviceRegistryKeycloakGroupCustomizer);
+        this.user = new KeycloakAdminRESTUser(instanceName, configuration, adminClient, customizerRegistryKeycloakUserCustomizer);
+        this.group = new KeycloakAdminRESTGroup(instanceName, configuration, adminClient, customizerRegistryKeycloakGroupCustomizer);
         this.client = new KeycloakAdminRESTClient(instanceName, configuration, adminClient);
         this.clientRole = new KeycloakAdminRESTClientRole(instanceName, configuration, adminClient);
     }

@@ -60,12 +60,12 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             String instanceName,
             KeycloakConfiguration configuration,
             Keycloak adminClient,
-            ServiceRegistry<KeycloakUserCustomizer> serviceRegistry
+            CustomizerRegistry<KeycloakUserCustomizer> customizerRegistry
     ) {
         this.instanceName = instanceName;
         this.configuration = configuration;
         this.adminClient = adminClient;
-        this.customizers = serviceRegistry.getServices();
+        this.customizers = customizerRegistry.getCustomizers();
     }
 
     private RealmResource realm(String realmName) {

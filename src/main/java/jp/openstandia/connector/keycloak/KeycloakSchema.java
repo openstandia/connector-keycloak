@@ -50,18 +50,18 @@ public class KeycloakSchema {
 
         SchemaBuilder schemaBuilder = new SchemaBuilder(KeycloakConnector.class);
 
-        ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry = new ServiceRegistry<>(ObjectClassSchemaCreatorCustomizer.class);
+        CustomizerRegistry<ObjectClassSchemaCreatorCustomizer> customizerRegistry = new CustomizerRegistry<>(ObjectClassSchemaCreatorCustomizer.class);
 
-        ObjectClassInfo userSchemaInfo = new UserObjectClassSchemaCreator(serviceRegistry).createSchema(getUserAttributes());
+        ObjectClassInfo userSchemaInfo = new UserObjectClassSchemaCreator(customizerRegistry).createSchema(getUserAttributes());
         schemaBuilder.defineObjectClass(userSchemaInfo);
 
-        ObjectClassInfo groupSchemaInfo = new GroupObjectClassSchemaCreator(serviceRegistry).createSchema(getGroupAttributes());
+        ObjectClassInfo groupSchemaInfo = new GroupObjectClassSchemaCreator(customizerRegistry).createSchema(getGroupAttributes());
         schemaBuilder.defineObjectClass(groupSchemaInfo);
 
-        ObjectClassInfo clientSchemaInfo = new ClientObjectClassSchemaCreator(serviceRegistry).createSchema(getClientAttributes());
+        ObjectClassInfo clientSchemaInfo = new ClientObjectClassSchemaCreator(customizerRegistry).createSchema(getClientAttributes());
         schemaBuilder.defineObjectClass(clientSchemaInfo);
 
-        ObjectClassInfo clientRoleSchemaInfo = new ClientRoleObjectClassSchemaCreator(serviceRegistry).createSchema(new String[]{});
+        ObjectClassInfo clientRoleSchemaInfo = new ClientRoleObjectClassSchemaCreator(customizerRegistry).createSchema(new String[]{});
         schemaBuilder.defineObjectClass(clientRoleSchemaInfo);
 
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildAttributesToGet(), SearchOp.class);

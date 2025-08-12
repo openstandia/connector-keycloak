@@ -9,8 +9,8 @@ import static jp.openstandia.connector.keycloak.KeycloakUserHandler.USER_OBJECT_
 public class UserObjectClassSchemaCreator extends AbstractObjectClassSchemaCreator {
     private static final ObjectClass OBJECT_CLASS = USER_OBJECT_CLASS;
 
-    public UserObjectClassSchemaCreator(ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry) {
-        super(OBJECT_CLASS, new ObjectClassUserSchemaCreatorCustomizer(), serviceRegistry);
+    public UserObjectClassSchemaCreator(CustomizerRegistry<ObjectClassSchemaCreatorCustomizer> customizerRegistry) {
+        super(OBJECT_CLASS, new ObjectClassUserSchemaCreatorCustomizer(), customizerRegistry);
     }
 
     private static class ObjectClassUserSchemaCreatorCustomizer extends AbstractObjectClassSchemaCreatorCustomizer {

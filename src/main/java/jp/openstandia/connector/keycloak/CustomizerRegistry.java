@@ -2,11 +2,11 @@ package jp.openstandia.connector.keycloak;
 
 import java.util.*;
 
-public class ServiceRegistry<T extends CustomizerWithPriority<T>> {
-    private final List<T> services;
+public class CustomizerRegistry<T extends CustomizerWithPriority<T>> {
+    private final List<T> customizers;
 
-    public ServiceRegistry(Class<T> serviceClass) {
-        this.services = loadServices(Objects.requireNonNull(serviceClass, "serviceClass cannot be null"));
+    public CustomizerRegistry(Class<T> serviceClass) {
+        this.customizers = loadServices(Objects.requireNonNull(serviceClass, "serviceClass cannot be null"));
     }
 
     private List<T> loadServices(Class<T> serviceClass) {
@@ -21,7 +21,7 @@ public class ServiceRegistry<T extends CustomizerWithPriority<T>> {
         return loaded;
     }
 
-    public List<T> getServices() {
-        return Collections.unmodifiableList(services);
+    public List<T> getCustomizers() {
+        return Collections.unmodifiableList(customizers);
     }
 }

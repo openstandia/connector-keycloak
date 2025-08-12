@@ -6,8 +6,8 @@ import org.identityconnectors.framework.common.objects.*;
 public class ClientObjectClassSchemaCreator extends AbstractObjectClassSchemaCreator {
     private static final ObjectClass OBJECT_CLASS = KeycloakClientHandler.CLIENT_OBJECT_CLASS;
 
-    public ClientObjectClassSchemaCreator(ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry) {
-        super(OBJECT_CLASS, new ClientClassUserSchemaCreatorCustomizer(), serviceRegistry);
+    public ClientObjectClassSchemaCreator(CustomizerRegistry<ObjectClassSchemaCreatorCustomizer> customizerRegistry) {
+        super(OBJECT_CLASS, new ClientClassUserSchemaCreatorCustomizer(), customizerRegistry);
     }
 
     private static class ClientClassUserSchemaCreatorCustomizer extends AbstractObjectClassSchemaCreatorCustomizer {

@@ -20,24 +20,24 @@ public abstract class AbstractObjectClassSchemaCreator implements ObjectClassSch
     protected AbstractObjectClassSchemaCreator(
             ObjectClass objectClass,
             ObjectClassSchemaCreatorCustomizer mainCustomizer,
-            ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry
+            CustomizerRegistry<ObjectClassSchemaCreatorCustomizer> customizerRegistry
     ) {
         this.objectClass = Objects.requireNonNull(objectClass, "objectClass cannot be null");
         this.customizers = customizersList(
                 objectClass,
                 Objects.requireNonNull(mainCustomizer, "mainCustomizer cannot be null"),
-                Objects.requireNonNull(serviceRegistry, "serviceRegistry cannot be null")
+                Objects.requireNonNull(customizerRegistry, "serviceRegistry cannot be null")
         );
     }
 
     private static List<ObjectClassSchemaCreatorCustomizer> customizersList(
             ObjectClass objectClass,
             ObjectClassSchemaCreatorCustomizer mainCustomizer,
-            ServiceRegistry<ObjectClassSchemaCreatorCustomizer> serviceRegistry
+            CustomizerRegistry<ObjectClassSchemaCreatorCustomizer> customizerRegistry
     ) {
         List<ObjectClassSchemaCreatorCustomizer> result = new ArrayList<>();
         addCustomizers(objectClass, Collections.singletonList(mainCustomizer), result);
-        addCustomizers(objectClass, result, serviceRegistry.getServices());
+        addCustomizers(objectClass, result, customizerRegistry.getCustomizers());
 
         Collections.sort(result);
         Collections.reverse(result);
