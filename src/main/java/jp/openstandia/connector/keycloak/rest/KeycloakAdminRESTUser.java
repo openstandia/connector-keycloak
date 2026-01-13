@@ -195,21 +195,6 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         return newUser;
     }
 
-    private Map<String, List<String>> groupClientRolesByClient(List<String> clientRolesList) {
-        Map<String, List<String>> result = new HashMap<>();
-
-        for (String role : clientRolesList) {
-            String[] parts = role.split("/", 2); // Split into key and value
-            if (parts.length == 2) {
-                String key = parts[0];
-                String value = parts[1];
-                // Add value to the list for the key
-                result.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
-            }
-        }
-        return result;
-    }
-
     private void updatePassword(String realmName, String userId, CredentialRepresentation credential, final Boolean permanent)
             throws InvalidAttributeValueException {
         if (credential == null) {
