@@ -16,6 +16,8 @@
 package jp.openstandia.connector.keycloak.rest;
 
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
+import jakarta.ws.rs.ProcessingException;
+import jakarta.ws.rs.ext.RuntimeDelegate;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import org.identityconnectors.common.StringUtil;
@@ -28,9 +30,6 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.info.ServerInfoRepresentation;
-
-import jakarta.ws.rs.ProcessingException;
-import jakarta.ws.rs.ext.RuntimeDelegate;
 
 import static jp.openstandia.connector.keycloak.KeycloakUtils.getRootCause;
 

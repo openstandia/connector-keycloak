@@ -15,6 +15,9 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
@@ -29,13 +32,8 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
-import org.keycloak.representations.idm.CredentialRepresentation;
-import org.keycloak.representations.idm.GroupRepresentation;
-import org.keycloak.representations.idm.UserRepresentation;
+import org.keycloak.representations.idm.*;
 
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -116,7 +114,23 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 }
             }
         }
-
+        Optional<Attribute> clientRolesAttr = createAttributes.stream()
+                .filter(a -> a.getName().equals(ATTR_CLIENT_ROLES))
+                .findFirst();
+        if (clientRolesAttr.isPresent()){
+            List<String> clientRoles = clientRolesAttr.get().getValue().stream().map(Object::toString).toList();
+                for (String clientRole : clientRoles){
+                    String[] parts = clientRole.split("/", 2);
+                    //find the role representation of the role we want to add
+                    RoleRepresentation roleToAdd = realm(realmName)
+                            .clients()
+                            .get(parts[0])
+                            .roles()
+                            .get(parts[1])
+                            .toRepresentation();
+                    users(realmName).get(uuid).roles().clientLevel(parts[0]).add(List.of(roleToAdd));
+                }
+        }
         return new Uid(uuid, new Name(newUser.getUsername()));
     }
 
@@ -162,26 +176,38 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 // See createUser method.
                 List<String> groups = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
                 newUser.setGroups(groups);
+            } else if (!schema.isUserSchema(attr)) {
+                throw new InvalidAttributeValueException(String.format("Keycloak doesn't support to set '%s' attribute of User",
+                        attr.getName()));
+            }
+            if (schema.isMultiValuedUserSchema(attr)) {
+                Map<String, List<String>> attrs = newUser.getAttributes();
+                if (attrs == null) {
+                    attrs = new HashMap();
+                }
+                attrs.put(attr.getName(), attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList()));
 
             } else {
-                if (!schema.isUserSchema(attr)) {
-                    throw new InvalidAttributeValueException(String.format("Keycloak doesn't support to set '%s' attribute of User",
-                            attr.getName()));
-                }
-                if (schema.isMultiValuedUserSchema(attr)) {
-                    Map<String, List<String>> attrs = newUser.getAttributes();
-                    if (attrs == null) {
-                        attrs = new HashMap();
-                    }
-                    attrs.put(attr.getName(), attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList()));
+                newUser.singleAttribute(attr.getName(), AttributeUtil.getStringValue(attr));
+            }
 
-                } else {
-                    newUser.singleAttribute(attr.getName(), AttributeUtil.getStringValue(attr));
-                }
+        }
+        return newUser;
+    }
+
+    private Map<String, List<String>> groupClientRolesByClient(List<String> clientRolesList) {
+        Map<String, List<String>> result = new HashMap<>();
+
+        for (String role : clientRolesList) {
+            String[] parts = role.split("/", 2); // Split into key and value
+            if (parts.length == 2) {
+                String key = parts[0];
+                String value = parts[1];
+                // Add value to the list for the key
+                result.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
             }
         }
-
-        return newUser;
+        return result;
     }
 
     private void updatePassword(String realmName, String userId, CredentialRepresentation credential, final Boolean permanent)
@@ -261,7 +287,30 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                             removeGroupIds.add(group.toString());
                         }
                     }
-
+                } else if (delta.getName().equals(ATTR_CLIENT_ROLES)) {
+                    if (delta.getValuesToAdd() != null) {
+                        for (Object role : delta.getValuesToAdd()) {
+                            String[] parts = role.toString().split("/", 2);
+                            RoleRepresentation roleToAdd = realm(realmName)
+                                    .clients()
+                                    .get(parts[0])
+                                    .roles()
+                                    .get(parts[1])
+                                    .toRepresentation();
+                            String clientId = roleToAdd.getContainerId();
+                            user.roles().clientLevel(parts[0]).add(List.of(roleToAdd));
+                        }
+                    }
+                    if (delta.getValuesToRemove() != null) {
+                        for (Object role : delta.getValuesToRemove()) {
+                            String[] parts = role.toString().split("/", 2);
+                            user.roles().clientLevel(parts[0]).remove(List.of(
+                                    realm(realmName)
+                                            .roles()
+                                            .get(parts[1])
+                                            .toRepresentation()));
+                        }
+                    }
                 } else if (schema.isUserSchema(delta)) {
                     if (schema.isMultiValuedUserSchema(delta)) {
                         Map<String, List<String>> attrs = current.getAttributes();
@@ -320,7 +369,6 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         // Although this connector doesn't handle this situation, IDM can retry the update to resolve this inconsistency.
 
         updatePassword(realmName, current.getId(), credential, true);
-
         for (String groupId : addGroupIds) {
             try {
                 users(realmName).get(current.getId()).joinGroup(groupId);
@@ -464,6 +512,24 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         }
         if (shouldReturn(attributesToGet, ATTR_LAST_NAME)) {
             builder.addAttribute(ATTR_LAST_NAME, user.getLastName());
+        }
+        if (shouldReturn(attributesToGet, ATTR_CLIENT_ROLES)) {
+            List<RoleRepresentation> clientRolesList = new ArrayList<>();
+            for (ClientRepresentation client : realm(realmName).clients().findAll()) {
+                clientRolesList.addAll(
+                        //find all clientRoles from a user for specified client
+                        realm(realmName)
+                                .users()
+                                .get(user.getId())
+                                .roles()
+                                .clientLevel(client.getId())
+                                .listAll());
+            }
+            List<String> clientRolesStrings = clientRolesList
+                    .stream()
+                    .map(a -> a.getContainerId() + "/" + a.getName())
+                    .toList();
+            builder.addAttribute(ATTR_CLIENT_ROLES, clientRolesStrings);
         }
 
         Map<String, List<String>> attributes = user.getAttributes();

@@ -15,11 +15,10 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
-import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
-import org.identityconnectors.framework.common.exceptions.ConnectorException;
-
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
+import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
+import org.identityconnectors.framework.common.exceptions.ConnectorException;
 
 /**
  * Utilities for Keycloak Admin REST client.

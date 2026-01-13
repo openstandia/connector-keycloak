@@ -15,6 +15,8 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
@@ -30,8 +32,6 @@ import org.keycloak.admin.client.resource.ClientsResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.ClientRepresentation;
 
-import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
 import java.util.*;
 import java.util.stream.Collectors;
 

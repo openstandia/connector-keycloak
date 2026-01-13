@@ -15,6 +15,7 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import jakarta.ws.rs.NotFoundException;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
@@ -31,7 +32,6 @@ import org.keycloak.admin.client.resource.RolesResource;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 
-import jakarta.ws.rs.NotFoundException;
 import java.util.*;
 
 import static jp.openstandia.connector.keycloak.KeycloakClientHandler.ATTR_CLIENT_UUID;

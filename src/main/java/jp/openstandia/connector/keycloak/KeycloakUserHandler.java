@@ -56,6 +56,7 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
     // Association
     // groups is a list of keycloak group's id
     public static final String ATTR_GROUPS = "groups";
+    public static final String ATTR_CLIENT_ROLES = "clientRoles";
 
     // Password
     public static final String ATTR_PASSWORD = "__PASSWORD__";
@@ -183,6 +184,11 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
 
         // Association
         builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_GROUPS)
+                .setMultiValued(true)
+                .setReturnedByDefault(false)
+                .build());
+
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_CLIENT_ROLES)
                 .setMultiValued(true)
                 .setReturnedByDefault(false)
                 .build());

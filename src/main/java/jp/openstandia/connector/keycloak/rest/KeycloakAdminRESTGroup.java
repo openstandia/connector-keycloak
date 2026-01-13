@@ -15,6 +15,8 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
@@ -27,14 +29,15 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.GroupResource;
 import org.keycloak.admin.client.resource.GroupsResource;
 import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.GroupRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
 
-import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.core.Response;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static jp.openstandia.connector.keycloak.KeycloakGroupHandler.*;
+import static jp.openstandia.connector.keycloak.KeycloakUserHandler.ATTR_CLIENT_ROLES;
 import static jp.openstandia.connector.keycloak.KeycloakUtils.*;
 import static jp.openstandia.connector.keycloak.rest.KeycloakRESTUtils.checkCreateResult;
 
@@ -84,7 +87,23 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         }
 
         String uuid = checkCreateResult(res, "createGroup");
-
+        Optional<Attribute> clientRolesAttr = createAttributes.stream()
+                .filter(a -> a.getName().equals(ATTR_CLIENT_ROLES))
+                .findFirst();
+        if (clientRolesAttr.isPresent()){
+            List<String> clientRoles = clientRolesAttr.get().getValue().stream().map(Object::toString).toList();
+            for (String clientRole : clientRoles){
+                String[] parts = clientRole.split("/", 2);
+                //find the role representation of the role we want to add
+                RoleRepresentation roleToAdd = realm(realmName)
+                        .clients()
+                        .get(parts[0])
+                        .roles()
+                        .get(parts[1])
+                        .toRepresentation();
+                groups(realmName).group(uuid).roles().clientLevel(parts[0]).add(List.of(roleToAdd));
+            }
+        }
         return new Uid(uuid, new Name(rep.getName()));
     }
 
@@ -126,7 +145,6 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         GroupsResource resource = groups(realmName);
         GroupRepresentation current;
         String newParentGroupId = null;
-
         try {
             GroupResource group = resource.group(uid.getUidValue());
             current = group.toRepresentation();
@@ -142,6 +160,28 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 } else if (delta.getName().equals(ATTR_PARENT_GROUP)) {
                     newParentGroupId = AttributeDeltaUtil.getAsStringValue(delta);
 
+                } else if (delta.getName().equals(ATTR_CLIENT_ROLES)) {
+                    if (delta.getValuesToAdd() != null){
+                        for (Object role : delta.getValuesToAdd()) {
+                            String[] parts = role.toString().split("/", 2);
+                            RoleRepresentation roleToAdd = realm(realmName)
+                                    .clients()
+                                    .get(parts[0])
+                                    .roles()
+                                    .get(parts[1])
+                                    .toRepresentation();
+                            group.roles().clientLevel(parts[0]).add(List.of(roleToAdd));
+                        }
+                    } if (delta.getValuesToRemove() != null){
+                        for (Object role : delta.getValuesToRemove()) {
+                            String[] parts = role.toString().split("/", 2);
+                            group.roles().clientLevel(parts[0]).remove(List.of(
+                                    realm(realmName)
+                                            .roles()
+                                            .get(parts[1])
+                                            .toRepresentation()));
+                        }
+                    }
                 } else if (schema.isGroupSchema(delta)) {
                     if (schema.isMultiValuedGroupSchema(delta)) {
                         Map<String, List<String>> attrs = current.getAttributes();
@@ -328,7 +368,24 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 .setName(rep.getName());
 
         builder.addAttribute(ATTR_PATH, rep.getPath());
-
+        if (shouldReturn(attributesToGet,ATTR_CLIENT_ROLES)){
+            List<RoleRepresentation> clientRolesList = new ArrayList<>();
+            for (ClientRepresentation client : realm(realmName).clients().findAll()) {
+                clientRolesList.addAll(
+                        //find all clientRoles from a user for specified client
+                        realm(realmName)
+                                .groups()
+                                .group(rep.getId())
+                                .roles()
+                                .clientLevel(client.getId())
+                                .listAll());
+            }
+            List<String> clientRolesStrings = clientRolesList
+                    .stream()
+                    .map(a -> a.getContainerId() + "/" + a.getName())
+                    .toList();
+            builder.addAttribute(ATTR_CLIENT_ROLES, clientRolesStrings);
+        }
         Map<String, List<String>> attributes = rep.getAttributes();
         if (attributes != null) {
             for (Map.Entry<String, List<String>> entry : rep.getAttributes().entrySet()) {
