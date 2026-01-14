@@ -427,7 +427,10 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
 
         // openid-connect
         if (shouldReturn(attributesToGet, ATTR_SECRET)) {
-            builder.addAttribute(ATTR_SECRET, rep.getSecret());
+            if (rep.getSecret() != null) {
+                GuardedString secret = new GuardedString(rep.getSecret().toCharArray());
+                builder.addAttribute(ATTR_SECRET, secret);
+            }
         }
         if (shouldReturn(attributesToGet, ATTR_PUBLIC_CLIENT)) {
             builder.addAttribute(ATTR_PUBLIC_CLIENT, rep.isPublicClient());
