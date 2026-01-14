@@ -175,11 +175,14 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                     } if (delta.getValuesToRemove() != null){
                         for (Object role : delta.getValuesToRemove()) {
                             String[] parts = role.toString().split("/", 2);
-                            group.roles().clientLevel(parts[0]).remove(List.of(
+                            RoleRepresentation removedRole =
                                     realm(realmName)
+                                            .clients()
+                                            .get(parts[0])
                                             .roles()
                                             .get(parts[1])
-                                            .toRepresentation()));
+                                            .toRepresentation();
+                            group.roles().clientLevel(parts[0]).remove(List.of(removedRole));
                         }
                     }
                 } else if (schema.isGroupSchema(delta)) {

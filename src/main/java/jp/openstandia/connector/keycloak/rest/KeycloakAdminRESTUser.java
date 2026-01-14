@@ -117,19 +117,19 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         Optional<Attribute> clientRolesAttr = createAttributes.stream()
                 .filter(a -> a.getName().equals(ATTR_CLIENT_ROLES))
                 .findFirst();
-        if (clientRolesAttr.isPresent()){
+        if (clientRolesAttr.isPresent()) {
             List<String> clientRoles = clientRolesAttr.get().getValue().stream().map(Object::toString).toList();
-                for (String clientRole : clientRoles){
-                    String[] parts = clientRole.split("/", 2);
-                    //find the role representation of the role we want to add
-                    RoleRepresentation roleToAdd = realm(realmName)
-                            .clients()
-                            .get(parts[0])
-                            .roles()
-                            .get(parts[1])
-                            .toRepresentation();
-                    users(realmName).get(uuid).roles().clientLevel(parts[0]).add(List.of(roleToAdd));
-                }
+            for (String clientRole : clientRoles) {
+                String[] parts = clientRole.split("/", 2);
+                //find the role representation of the role we want to add
+                RoleRepresentation roleToAdd = realm(realmName)
+                        .clients()
+                        .get(parts[0])
+                        .roles()
+                        .get(parts[1])
+                        .toRepresentation();
+                users(realmName).get(uuid).roles().clientLevel(parts[0]).add(List.of(roleToAdd));
+            }
         }
         return new Uid(uuid, new Name(newUser.getUsername()));
     }
@@ -193,6 +193,21 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
         }
         return newUser;
+    }
+
+    private Map<String, List<String>> groupClientRolesByClient(List<String> clientRolesList) {
+        Map<String, List<String>> result = new HashMap<>();
+
+        for (String role : clientRolesList) {
+            String[] parts = role.split("/", 2); // Split into key and value
+            if (parts.length == 2) {
+                String key = parts[0];
+                String value = parts[1];
+                // Add value to the list for the key
+                result.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
+            }
+        }
+        return result;
     }
 
     private void updatePassword(String realmName, String userId, CredentialRepresentation credential, final Boolean permanent)
@@ -274,6 +289,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                     }
                 } else if (delta.getName().equals(ATTR_CLIENT_ROLES)) {
                     if (delta.getValuesToAdd() != null) {
+                        //Roles are added one by one as lists of 1 item because they are each added under their respective clients
                         for (Object role : delta.getValuesToAdd()) {
                             String[] parts = role.toString().split("/", 2);
                             RoleRepresentation roleToAdd = realm(realmName)
@@ -282,18 +298,20 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                                     .roles()
                                     .get(parts[1])
                                     .toRepresentation();
-                            String clientId = roleToAdd.getContainerId();
                             user.roles().clientLevel(parts[0]).add(List.of(roleToAdd));
                         }
                     }
                     if (delta.getValuesToRemove() != null) {
                         for (Object role : delta.getValuesToRemove()) {
                             String[] parts = role.toString().split("/", 2);
-                            user.roles().clientLevel(parts[0]).remove(List.of(
+                            RoleRepresentation removedRole =
                                     realm(realmName)
+                                            .clients()
+                                            .get(parts[0])
                                             .roles()
                                             .get(parts[1])
-                                            .toRepresentation()));
+                                            .toRepresentation();
+                            user.roles().clientLevel(parts[0]).remove(List.of(removedRole));
                         }
                     }
                 } else if (schema.isUserSchema(delta)) {
