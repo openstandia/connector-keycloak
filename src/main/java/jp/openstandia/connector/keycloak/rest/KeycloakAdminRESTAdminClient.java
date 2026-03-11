@@ -65,6 +65,14 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         ResteasyClientBuilder resteasyClientBuilder = new ResteasyClientBuilderImpl();
         resteasyClientBuilder.connectionPoolSize(20);
 
+        // Register a named ContextResolver<ObjectMapper> so that JacksonJsonProvider.locateMapper()
+        // uses our pre-configured mapper instead of calling ObjectMapper.findAndRegisterModules().
+        // A lambda cannot be used here: RESTEasy resolves the generic type T of ContextResolver<T>
+        // via Class.getGenericInterfaces(), which returns null for synthetic lambda classes and
+        // causes: RESTEASY003920 / NullPointerException: "root" is null.
+        // See KeycloakObjectMapperContextResolver for the full rationale.
+        resteasyClientBuilder.register(new KeycloakObjectMapperContextResolver());
+
         // HTTP proxy configuration
         if (configuration.getHttpProxyHost() != null && configuration.getHttpProxyPort() != 0) {
             final String httpProxyHost = configuration.getHttpProxyHost();
@@ -83,11 +91,18 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
             }
         }
 
+        // Normalize the server URL once to avoid double-slash or /auth legacy issues.
+        // getNormalizedServerUrl() strips trailing slashes and accepts sub-path URLs
+        // such as https://iam.example.com/iam — the admin client will append
+        // /realms/{realm}/... and /admin/realms/{realm}/... automatically.
+        final String normalizedServerUrl = configuration.getNormalizedServerUrl();
+        LOGGER.ok("Using Keycloak server URL: {0}", normalizedServerUrl);
+
         // grant_type=password mode
         if (configuration.getUsername() != null && configuration.getPassword() != null) {
             configuration.getPassword().access(s -> {
                 adminClient = KeycloakBuilder.builder()
-                        .serverUrl(configuration.getServerUrl())
+                        .serverUrl(normalizedServerUrl)
                         .realm(configuration.getRealmName())
                         .grantType("password")
                         .username(configuration.getUsername())
@@ -99,7 +114,7 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         } else if (configuration.getClientSecret() != null) {
             configuration.getClientSecret().access(s -> {
                 adminClient = KeycloakBuilder.builder()
-                        .serverUrl(configuration.getServerUrl())
+                        .serverUrl(normalizedServerUrl)
                         .realm(configuration.getRealmName())
                         .grantType("client_credentials")
                         .clientId(configuration.getClientId())
@@ -139,8 +154,28 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
 
     @Override
     public String getVersion() {
-        ServerInfoRepresentation info = adminClient.serverInfo().getInfo();
-        return info.getSystemInfo().getVersion();
+        // The /admin/serverinfo endpoint requires master-realm admin credentials.
+        // When the connector is configured to authenticate against a non-master realm,
+        // serverInfo().getInfo() may return a ServerInfoRepresentation where getSystemInfo()
+        // is null (access denied or incomplete response).
+        // In that case we fall back to a synthetic version string derived from the
+        // admin-client library version so that KeycloakSchema.parseVersion() still works.
+        try {
+            ServerInfoRepresentation info = adminClient.serverInfo().getInfo();
+            if (info != null && info.getSystemInfo() != null && info.getSystemInfo().getVersion() != null) {
+                return info.getSystemInfo().getVersion();
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Could not retrieve server version via /admin/serverinfo (may require master realm access): {0}", e.getMessage());
+        }
+        // Fallback: return the keycloak-admin-client jar version so the connector
+        // can still initialise and operate correctly against the target realm.
+        String fallback = org.keycloak.admin.client.Keycloak.class.getPackage().getImplementationVersion();
+        if (fallback == null) {
+            fallback = "26.0.0";
+        }
+        LOGGER.ok("Falling back to library version: {0}", fallback);
+        return fallback;
     }
 
     @Override

@@ -24,6 +24,7 @@ import org.identityconnectors.framework.common.exceptions.AlreadyExistsException
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.exceptions.UnknownUidException;
 import org.identityconnectors.framework.common.objects.*;
+import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.admin.client.resource.ClientsResource;
@@ -349,6 +350,10 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
         for (ClientRepresentation rep : results) {
             handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
         }
+
+        if (handler instanceof SearchResultsHandler) {
+            ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
+        }
     }
 
     @Override
@@ -385,7 +390,7 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
         List<ClientRepresentation> results = clients.findByClientId(name.getNameValue());
 
         for (ClientRepresentation rep : results) {
-            if (rep.getName().equalsIgnoreCase(name.getNameValue())) {
+            if (rep.getClientId().equalsIgnoreCase(name.getNameValue())) {
                 // Found
                 handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
                 return;
@@ -427,7 +432,11 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
 
         // openid-connect
         if (shouldReturn(attributesToGet, ATTR_SECRET)) {
-            builder.addAttribute(ATTR_SECRET, rep.getSecret());
+            if(rep.getSecret()!=null)
+                builder.addAttribute(ATTR_SECRET, new GuardedString(rep.getSecret().toCharArray()));
+            else
+                builder.addAttribute(ATTR_SECRET, rep.getSecret());
+
         }
         if (shouldReturn(attributesToGet, ATTR_PUBLIC_CLIENT)) {
             builder.addAttribute(ATTR_PUBLIC_CLIENT, rep.isPublicClient());

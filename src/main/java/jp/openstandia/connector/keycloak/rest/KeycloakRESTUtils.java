@@ -44,8 +44,8 @@ public class KeycloakRESTUtils {
                     apiName, result.getStatus()));
         }
 
-        throw new ConnectorException(String.format("Keycloak returns unexpected error when calling \"%s\". status: %d",
-                apiName, result.getStatus()));
+        throw new ConnectorException(String.format("Keycloak returns unexpected error when calling \"%s\". status: %d. Message: \"%s\"",
+                apiName, result.getStatus(), result.readEntity(String.class)));
     }
 
     public static void checkDeleteResult(Response result, String apiName) {
@@ -58,7 +58,7 @@ public class KeycloakRESTUtils {
                     apiName, result.getStatus()));
         }
 
-        throw new ConnectorException(String.format("Keycloak returns unexpected error when calling \"%s\". status: %d",
-                apiName, result.getStatus()));
+        throw new ConnectorException(String.format("Keycloak returns unexpected error when calling \"%s\". status: %d. Message: \"%s\"",
+                apiName, result.getStatus(), result.readEntity(String.class)));
     }
 }

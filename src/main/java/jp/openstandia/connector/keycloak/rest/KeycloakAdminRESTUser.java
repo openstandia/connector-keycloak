@@ -15,6 +15,9 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
@@ -25,6 +28,7 @@ import org.identityconnectors.framework.common.exceptions.AlreadyExistsException
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.exceptions.UnknownUidException;
 import org.identityconnectors.framework.common.objects.*;
+import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
@@ -75,7 +79,11 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
     @Override
     public Uid createUser(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes)
             throws AlreadyExistsException {
+        LOGGER.ok("createUser attributes count: {0}", createAttributes.size());
+
         UserRepresentation newUser = toUserRep(schema, createAttributes);
+        LOGGER.ok("Creating user: {0}", newUser.getUsername());
+
 
         CredentialRepresentation credential = null;
         if (configuration.isPasswordResetAPIEnabled()) {
@@ -92,6 +100,24 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         newUser.setGroups(null);
 
         Response res = users(realmName).create(newUser);
+
+        // Buffer the entity so it can be read multiple times (e.g. by checkCreateResult on error paths).
+        res.bufferEntity();
+        if (LOGGER.isOk()) {
+            try {
+                String resBody = res.readEntity(String.class);
+                LOGGER.ok("ResBody: {0}", resBody);
+                if (resBody != null && !resBody.isBlank()) {
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode node = mapper.readTree(resBody);
+                    if (node != null) {
+                        LOGGER.ok("Response message: {0}", node.path("message").asText(""));
+                    }
+                }
+            } catch (JsonProcessingException e) {
+                LOGGER.warn("Could not parse response body as JSON: {0}", e.getMessage());
+            }
+        }
 
         String uuid = checkCreateResult(res, "createUser");
 
@@ -158,9 +184,10 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
             } else if (attr.getName().equals(ATTR_GROUPS)) {
                 // Keycloak expects the group list as group path list.
-                // Because we set group id list here, we cant't use it for this API.
+                // Because we set group id list here, we can't use it for this API directly.
                 // See createUser method.
                 List<String> groups = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
+                LOGGER.ok("Set groups: {0}", groups);
                 newUser.setGroups(groups);
 
             } else {
@@ -359,25 +386,43 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         boolean allowPartialAttributeValues = shouldAllowPartialAttributeValues(options);
 
         UsersResource users = users(realmName);
+        int totalCount = users.count();
 
-        Integer count = users.count();
+        LOGGER.ok("[{0}] getUsers: totalCount={1}, requestedPageSize={2}, requestedOffset={3}",
+                instanceName, totalCount,
+                options != null ? options.getPageSize() : null,
+                options != null ? options.getPagedResultsOffset() : null);
 
+        // Stream all users in internal batches and let MidPoint handle display-level paging.
+        // Reporting allResultsReturned=true lets MidPoint derive the exact total count
+        // from the objects returned, preventing phantom Integer.MAX_VALUE page counts.
         int start = 0;
         int total = 0;
 
-        while (total < count) {
+        while (total < totalCount) {
             List<UserRepresentation> results = users.search("", start, queryPageSize, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 
             for (UserRepresentation rep : results) {
-                handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
+                LOGGER.ok("Processing user: {0}", rep.getUsername());
+                if (!handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet,
+                        allowPartialAttributeValues, queryPageSize))) {
+                    if (handler instanceof SearchResultsHandler) {
+                        ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
+                    }
+                    return;
+                }
             }
 
             total += results.size();
             start += queryPageSize;
+        }
+
+        if (handler instanceof SearchResultsHandler) {
+            ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
         }
     }
 
@@ -413,9 +458,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         int total = 0;
 
         while (total < count) {
-            int end = start + queryPageSize;
-
-            List<UserRepresentation> results = users.search(name.getNameValue(), start, end, true);
+            List<UserRepresentation> results = users.search(name.getNameValue(), start, queryPageSize, true);
 
             if (results.size() == 0) {
                 break;
@@ -430,7 +473,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             }
 
             total += results.size();
-            start = end + 1;
+            start += results.size();
         }
 
         // NotFound

@@ -23,6 +23,7 @@ import org.identityconnectors.framework.common.exceptions.AlreadyExistsException
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.exceptions.UnknownUidException;
 import org.identityconnectors.framework.common.objects.*;
+import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.GroupResource;
 import org.keycloak.admin.client.resource.GroupsResource;
@@ -234,24 +235,42 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         GroupsResource groups = groups(realmName);
 
         Map<String, Long> countMap = groups.count();
-        Long count = countMap.get("count");
+        long totalCount = countMap.getOrDefault("count", 0L);
 
+        LOGGER.ok("[{0}] getGroups: totalCount={1}, requestedPageSize={2}, requestedOffset={3}",
+                instanceName, totalCount,
+                options != null ? options.getPageSize() : null,
+                options != null ? options.getPagedResultsOffset() : null);
+
+        // Stream all groups in internal batches and let MidPoint handle display-level paging.
+        // Reporting allResultsReturned=true lets MidPoint derive the exact total count
+        // from the objects returned, preventing phantom Integer.MAX_VALUE page counts.
         int start = 0;
         int total = 0;
 
-        while (total < count) {
+        while (total < totalCount) {
             List<GroupRepresentation> results = groups.groups("", start, queryPageSize, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 
             for (GroupRepresentation rep : results) {
-                handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
+                if (!handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet,
+                        allowPartialAttributeValues, queryPageSize))) {
+                    if (handler instanceof SearchResultsHandler) {
+                        ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
+                    }
+                    return;
+                }
             }
 
             total += results.size();
             start += queryPageSize;
+        }
+
+        if (handler instanceof SearchResultsHandler) {
+            ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
         }
     }
 
@@ -293,9 +312,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         int total = 0;
 
         while (total < count) {
-            int end = start + queryPageSize;
-
-            List<GroupRepresentation> results = groups.groups(name.getNameValue(), start, end, true);
+            List<GroupRepresentation> results = groups.groups(name.getNameValue(), start, queryPageSize, true);
 
             if (results.size() == 0) {
                 break;
@@ -310,7 +327,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
             }
 
             total += results.size();
-            start = end + 1;
+            start += results.size();
         }
 
         // NotFound
