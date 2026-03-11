@@ -12,7 +12,7 @@
 
     <groupId>jp.openstandia.connector</groupId>
     <artifactId>connector-keycloak</artifactId>
-    <version>1.1.7-SNAPSHOT</version>
+    <version>1.1.7-keycloak26</version>
     <packaging>jar</packaging>
 
     <name>Keycloak Connector</name>
@@ -155,6 +155,7 @@
                 <artifactId>maven-gpg-plugin</artifactId>
                 <version>1.6</version>
                 <configuration>
+                    <skip>true</skip>
                     <gpgArguments>
                         <arg>--pinentry-mode</arg>
                         <arg>loopback</arg>
@@ -178,7 +179,7 @@
             <dependency>
                 <groupId>org.keycloak</groupId>
                 <artifactId>keycloak-admin-client</artifactId>
-                <version>24.0.2</version>
+                <version>26.0.8</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -214,19 +215,19 @@
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework</artifactId>
-                    <version>1.5.2.0</version>
+                    <version>1.6.0.0</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-internal</artifactId>
-                    <version>1.5.2.0</version>
+                    <version>1.6.0.0</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-contract</artifactId>
-                    <version>1.5.2.0</version>
+                    <version>1.6.0.0</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>
@@ -245,7 +246,7 @@
                     <artifactId>admin-gui</artifactId>
                     <type>jar</type>
                     <classifier>classes</classifier>
-                    <version>4.4.8</version>
+                    <version>4.8.2</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
@@ -262,19 +263,19 @@
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework</artifactId>
-                    <version>1.5.1.10</version>
+                    <version>1.6.0.0</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-internal</artifactId>
-                    <version>1.5.1.10</version>
+                    <version>1.6.0.0</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-contract</artifactId>
-                    <version>1.5.1.10</version>
+                    <version>1.6.0.0</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>
@@ -326,7 +327,7 @@
                     <artifactId>admin-gui</artifactId>
                     <type>jar</type>
                     <classifier>classes</classifier>
-                    <version>4.0.4</version>
+                    <version>4.8.2</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
@@ -343,19 +344,19 @@
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework</artifactId>
-                    <version>1.5.0.10</version>
+                    <version>1.6.0.0</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-internal</artifactId>
-                    <version>1.5.0.10</version>
+                    <version>1.6.0.0</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-contract</artifactId>
-                    <version>1.5.0.10</version>
+                    <version>1.6.0.0</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>

@@ -21,6 +21,9 @@ import org.identityconnectors.framework.common.exceptions.ConfigurationException
 import org.identityconnectors.framework.spi.AbstractConfiguration;
 import org.identityconnectors.framework.spi.ConfigurationProperty;
 
+import java.net.MalformedURLException;
+import java.net.URL;
+
 /**
  * Connector Configuration implementation for keycloak connector.
  *
@@ -52,11 +55,32 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     @ConfigurationProperty(
             order = 1,
             displayMessageKey = "Keycloak Server URL",
-            helpMessageKey = "Keycloak Server URL (ex. https://mykeycloak/auth).",
+            helpMessageKey = "Base URL of the Keycloak server. May include a context path. " +
+                    "Examples: https://iam.example.com  or  https://iam.example.com/iam  " +
+                    "Do NOT append /auth (legacy Keycloak < 17) or any realm/admin suffix. " +
+                    "A trailing slash is accepted and will be stripped automatically.",
             required = true,
             confidential = false)
     public String getServerUrl() {
         return serverUrl;
+    }
+
+    /**
+     * Returns the server URL normalized for use with the Keycloak admin client:
+     * trailing slashes are stripped so the client can append /realms/... paths cleanly.
+     * Both plain host URLs (https://iam.example.com) and sub-path URLs
+     * (https://iam.example.com/iam) are supported.
+     */
+    public String getNormalizedServerUrl() {
+        if (serverUrl == null) {
+            return null;
+        }
+        String normalized = serverUrl.trim();
+        // Strip all trailing slashes so the admin client can append paths correctly
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     public void setServerUrl(String serverUrl) {
@@ -325,8 +349,20 @@ public class KeycloakConfiguration extends AbstractConfiguration {
 
     @Override
     public void validate() {
+        if (StringUtil.isBlank(serverUrl)) {
+            throw new ConfigurationException("Server URL must be provided.");
+        }
+        try {
+            URL url = new URL(getNormalizedServerUrl());
+            String protocol = url.getProtocol();
+            if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
+                throw new ConfigurationException("Server URL must use http or https scheme: " + serverUrl);
+            }
+        } catch (MalformedURLException e) {
+            throw new ConfigurationException("Server URL is not a valid URL: " + serverUrl, e);
+        }
         if (StringUtil.isBlank(getUsername()) || getPassword() == null && getClientSecret() == null) {
-            throw new ConfigurationException("Invalid client credential: need to setup username/password or client secret.");
+            throw new ConfigurationException("Invalid client credential: need to setup username/password or clientId/clientSecret.");
         }
     }
 }

@@ -99,15 +99,13 @@ public class KeycloakSchema {
 
     private void parseVersion() {
         try {
-            String[] s = version.split("\\.");
+            // Strip any build metadata or pre-release suffix (e.g. "-SNAPSHOT", ".Final", "-alpha1")
+            // so that version strings such as "26.0.0", "26.0.0-SNAPSHOT", "26.0.0.Final" all parse correctly.
+            String v = version.replaceAll("[^0-9.].*$", "");
+            String[] s = v.split("\\.");
             this.majorVersion = Integer.parseInt(s[0]);
-            this.minorVersion = Integer.parseInt(s[1]);
-            if (s[2].contains("-")) {
-                String ps = s[2].substring(0, s[2].indexOf("-"));
-                this.patchVersion = Integer.parseInt(ps);
-            } else {
-                this.patchVersion = Integer.parseInt(s[2]);
-            }
+            this.minorVersion = s.length > 1 ? Integer.parseInt(s[1]) : 0;
+            this.patchVersion = s.length > 2 ? Integer.parseInt(s[2]) : 0;
         } catch (NumberFormatException | IndexOutOfBoundsException e) {
             throw new ConnectorException(String.format("Keycloak returns unexpected version number: %s", version));
         }
