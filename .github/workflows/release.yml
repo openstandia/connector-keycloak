@@ -1,4 +1,4 @@
-name: Release package to the Maven Central Repository
+name: release version
 
 on:
   push:
@@ -7,44 +7,14 @@ on:
 
 jobs:
   build:
-    name: Build and release
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'corretto'
-          java-version: 11
-          cache: 'maven'
-          server-id: ossrh
-          server-username: OSSRH_JIRA_USERNAME
-          server-password: OSSRH_JIRA_PASSWORD
-          gpg-private-key: ${{ secrets.OSSRH_GPG_SECRET_KEY }}
-          gpg-passphrase: OSSRH_GPG_SECRET_KEY_PASSWORD
-      - name: Setup node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-          cache: 'yarn'
-      - name: Setup semantic-release
-        run: |
-          yarn global add @conveyal/maven-semantic-release@v4.5.0 semantic-release@15
-          echo "$(yarn global bin)" >> $GITHUB_PATH
-      - name: Test
-        run: mvn -B test
+      - uses: actions/checkout@v6
+      - name: Build and Test
+        uses: qcastel/github-actions-maven-cmd@master
       - name: Release
-        # maven-semantic-release requires "maven-settings.xml" in the workspace directory
-        run: |
-          mv ~/.m2/settings.xml maven-settings.xml
-          semantic-release --branch master --prepare @conveyal/maven-semantic-release \
-            --publish @semantic-release/github,@conveyal/maven-semantic-release \
-            --verify-conditions @semantic-release/github,@conveyal/maven-semantic-release \
-            --verify-release @conveyal/maven-semantic-release\
-            --use-conveyal-workflow
+        uses: qcastel/github-actions-maven-release@master
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OSSRH_JIRA_USERNAME: ${{ secrets.OSSRH_JIRA_USERNAME }}
-          OSSRH_JIRA_PASSWORD: ${{ secrets.OSSRH_JIRA_PASSWORD }}
-          OSSRH_GPG_SECRET_KEY_PASSWORD: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
+          JAVA_HOME: /usr/lib/jvm/java-11-openjdk/

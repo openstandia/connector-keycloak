@@ -41,19 +41,16 @@
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/openstandia/connector-keycloak.git</connection>
-        <developerConnection>scm:git:https://github.com/openstandia/connector-keycloak.git</developerConnection>
-        <url>https://github.com/openstandia/connector-keycloak</url>
+        <connection>scm:git:${project.scm.url}</connection>
+        <developerConnection>scm:git:${project.scm.url}</developerConnection>
+        <url>https://github.com/openstandia/connector-keycloak.git</url>
     </scm>
 
     <distributionManagement>
-        <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
         <repository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/octocat/hello-world</url>
         </repository>
     </distributionManagement>
 
@@ -117,6 +114,13 @@
                     <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                     <autoReleaseAfterClose>true</autoReleaseAfterClose>
                     <stagingProgressTimeoutMinutes>20</stagingProgressTimeoutMinutes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-release-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <scmCommentPrefix>[ci skip]</scmCommentPrefix>
                 </configuration>
             </plugin>
             <plugin>
