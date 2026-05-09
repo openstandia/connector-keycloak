@@ -102,7 +102,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
         List<String> addRoles = new ArrayList<>();
         for (Attribute attr : createAttributes) {
-            if (attr.getName().equals(ATTR_ROLES)) {
+            if (attr.getName().equals(ATTR_REALM_ROLES)) {
                 addRoles = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
             }
         }
@@ -214,7 +214,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 LOGGER.ok("Set groups: {0}", groups);
                 newUser.setGroups(groups);
 
-            } else if (attr.getName().equals(ATTR_ROLES)) {
+            } else if (attr.getName().equals(ATTR_REALM_ROLES)) {
                 // Keycloak expects roles to be mapped via RoleMappingResource.
                 // We handle it in createUser method.
                 // Do nothing here explicitly to avoid falling into the default branch.
@@ -320,7 +320,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                         }
                     }
 
-                } else if (delta.getName().equals(ATTR_ROLES)) {
+                } else if (delta.getName().equals(ATTR_REALM_ROLES)) {
                     if (delta.getValuesToAdd() != null) {
                         for (Object role : delta.getValuesToAdd()) {
                             addRoles.add(role.toString());
@@ -611,7 +611,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             builder.addAttribute(ab.build());
 
             AttributeBuilder arb = new AttributeBuilder();
-            arb.setName(ATTR_ROLES).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
+            arb.setName(ATTR_REALM_ROLES).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
             arb.addValue(Collections.EMPTY_LIST);
             builder.addAttribute(arb.build());
         } else {
@@ -628,12 +628,12 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                     builder.addAttribute(ATTR_GROUPS, groups.stream().map(g -> g.getId()).collect(Collectors.toList()));
                 }
 
-                if (shouldReturn(attributesToGet, ATTR_ROLES)) {
+                if (shouldReturn(attributesToGet, ATTR_REALM_ROLES)) {
                     // Fetch roles
                     LOGGER.ok("[{0}] Fetching roles because attributes to get is requested", instanceName);
 
                     List<RoleRepresentation> roles = users(realmName).get(user.getId()).roles().realmLevel().listAll();
-                    builder.addAttribute(ATTR_ROLES, roles.stream().map(r -> r.getName()).collect(Collectors.toList()));
+                    builder.addAttribute(ATTR_REALM_ROLES, roles.stream().map(r -> r.getName()).collect(Collectors.toList()));
                 }
             }
         }

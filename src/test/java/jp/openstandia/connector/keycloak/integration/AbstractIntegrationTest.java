@@ -49,6 +49,8 @@ public abstract class AbstractIntegrationTest {
     private static final int KEYCLOAK_PORT = 8080;
     private static final Set<String> DEFAULT_CLIENTS = new HashSet<>(Arrays.asList(
             "account", "account-console", "admin-cli", "broker", "realm-management", "security-admin-console"));
+    private static final Set<String> DEFAULT_REALM_ROLES = new HashSet<>(Arrays.asList(
+            "offline_access", "uma_authorization", "default-roles-" + TEST_REALM));
 
     protected static GenericContainer<?> keycloak;
     protected static String keycloakBaseUrl;
@@ -161,6 +163,13 @@ public abstract class AbstractIntegrationTest {
             admin.realm(TEST_REALM).clients().findAll().forEach(client -> {
                 if (!DEFAULT_CLIENTS.contains(client.getClientId())) {
                     admin.realm(TEST_REALM).clients().get(client.getId()).remove();
+                }
+            });
+
+            // Delete non-default realm roles
+            admin.realm(TEST_REALM).roles().list().forEach(role -> {
+                if (!DEFAULT_REALM_ROLES.contains(role.getName())) {
+                    admin.realm(TEST_REALM).roles().deleteRole(role.getName());
                 }
             });
         }

@@ -57,8 +57,8 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
     // groups is a list of keycloak group's id
     public static final String ATTR_GROUPS = "groups";
 
-    // roles is a list of keycloak realm role names
-    public static final String ATTR_ROLES = "roles";
+    // realmRoles is a list of keycloak realm role names
+    public static final String ATTR_REALM_ROLES = "realmRoles";
 
     // Password
     public static final String ATTR_PASSWORD = "__PASSWORD__";
@@ -75,7 +75,7 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
         attrs.add(Name.NAME);
         attrs.add(ATTR_CREATED_TIMESTAMP);
         attrs.add(ATTR_GROUPS);
-        attrs.add(ATTR_ROLES);
+        attrs.add(ATTR_REALM_ROLES);
         attrs.add(ATTR_PASSWORD_PERMANENT);
         attrs.addAll(OperationalAttributes.OPERATIONAL_ATTRIBUTE_NAMES);
 
@@ -190,7 +190,7 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
                 .setMultiValued(true)
                 .setReturnedByDefault(false)
                 .build());
-        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_ROLES)
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_REALM_ROLES)
                 .setMultiValued(true)
                 .setReturnedByDefault(false)
                 .build());

@@ -29,8 +29,8 @@ class SchemaIT extends AbstractIntegrationTest {
     void schema() {
         Schema schema = connector.schema();
         assertNotNull(schema);
-        // user, group, client, clientRole
-        assertEquals(4, schema.getObjectClassInfo().size());
+        // user, group, client, clientRole, realmRole
+        assertEquals(5, schema.getObjectClassInfo().size());
     }
 
     @Test
@@ -43,8 +43,8 @@ class SchemaIT extends AbstractIntegrationTest {
                 .orElseThrow();
 
         // Uid, Name, __PASSWORD__, __ENABLE__, email, emailVerified, firstName, lastName,
-        // createdTimestamp, groups = 10
-        assertEquals(10, userInfo.getAttributeInfo().size());
+        // createdTimestamp, groups, roles = 11
+        assertEquals(11, userInfo.getAttributeInfo().size());
     }
 
     @Test
@@ -60,8 +60,8 @@ class SchemaIT extends AbstractIntegrationTest {
                 .findFirst()
                 .orElseThrow();
 
-        // 10 + 2 custom attributes = 12
-        assertEquals(12, userInfo.getAttributeInfo().size());
+        // 11 + 2 custom attributes = 13
+        assertEquals(13, userInfo.getAttributeInfo().size());
     }
 
     @Test
@@ -121,5 +121,18 @@ class SchemaIT extends AbstractIntegrationTest {
 
         // Uid, Name, description, attributes = 4
         assertEquals(4, clientRoleInfo.getAttributeInfo().size());
+    }
+
+    @Test
+    void realmRole() {
+        Schema schema = connector.schema();
+
+        ObjectClassInfo realmRoleInfo = schema.getObjectClassInfo().stream()
+                .filter(o -> o.getType().equals("realmRole"))
+                .findFirst()
+                .orElseThrow();
+
+        // Uid, Name, description, attributes = 4
+        assertEquals(4, realmRoleInfo.getAttributeInfo().size());
     }
 }

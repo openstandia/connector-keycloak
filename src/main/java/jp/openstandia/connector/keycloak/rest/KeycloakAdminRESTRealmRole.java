@@ -23,6 +23,7 @@ import org.identityconnectors.framework.common.exceptions.AlreadyExistsException
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.exceptions.UnknownUidException;
 import org.identityconnectors.framework.common.objects.*;
+import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.RolesResource;
@@ -215,15 +216,36 @@ public class KeycloakAdminRESTRealmRole implements KeycloakClient.RealmRole {
                                Set<String> attributesToGet, int queryPageSize) {
         boolean allowPartialAttributeValues = shouldAllowPartialAttributeValues(options);
 
-        RealmResource realmResource = realm(realmName);
-        RolesResource rolesResource = realmResource.roles();
+        RolesResource rolesResource = realm(realmName).roles();
 
-        // TODO paging
-        List<RoleRepresentation> realmRoles = rolesResource.list();
+        int start = 0;
 
-        realmRoles.stream().forEach(cr -> {
-            handler.handle(toConnectorObject(schema, realmName, cr, attributesToGet, allowPartialAttributeValues, queryPageSize));
-        });
+        while (true) {
+            List<RoleRepresentation> realmRoles = rolesResource.list(start, queryPageSize);
+
+            if (realmRoles.isEmpty()) {
+                break;
+            }
+
+            for (RoleRepresentation cr : realmRoles) {
+                if (!handler.handle(toConnectorObject(schema, realmName, cr, attributesToGet, allowPartialAttributeValues, queryPageSize))) {
+                    if (handler instanceof SearchResultsHandler) {
+                        ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
+                    }
+                    return;
+                }
+            }
+
+            start += realmRoles.size();
+
+            if (realmRoles.size() < queryPageSize) {
+                break;
+            }
+        }
+
+        if (handler instanceof SearchResultsHandler) {
+            ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
+        }
     }
 
     @Override
