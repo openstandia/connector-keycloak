@@ -26,6 +26,8 @@ import org.identityconnectors.framework.common.exceptions.UnknownUidException;
 import org.identityconnectors.framework.common.objects.*;
 import org.identityconnectors.framework.common.objects.filter.FilterBuilder;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.*;
 
@@ -397,17 +399,17 @@ class UserIT extends AbstractIntegrationTest {
         Uid clientUid = connector.create(KeycloakClientHandler.CLIENT_OBJECT_CLASS, clientAttrs, new OperationOptionsBuilder().build());
         String clientUUID = clientUid.getUidValue();
 
-        // Create client roles
-        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+        // Create client roles — Uid is now in "clientUUID/roleId" format
+        Uid cr1Uid = connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
                 set(new Name(clientUUID + "/cr1")), new OperationOptionsBuilder().build());
-        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+        Uid cr2Uid = connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
                 set(new Name(clientUUID + "/cr2")), new OperationOptionsBuilder().build());
 
-        // Create user with client roles
+        // Create user with client roles using Uid values (clientUUID/roleId)
         Set<Attribute> attrs = new HashSet<>();
         attrs.add(new Name("foo"));
         attrs.add(AttributeBuilder.buildEnabled(true));
-        attrs.add(AttributeBuilder.build("clientRoles", list(clientUUID + "/cr1", clientUUID + "/cr2")));
+        attrs.add(AttributeBuilder.build("clientRoles", list(cr1Uid.getUidValue(), cr2Uid.getUidValue())));
 
         Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
 
@@ -415,8 +417,8 @@ class UserIT extends AbstractIntegrationTest {
                 new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("clientRoles"));
 
         List<Object> clientRoles = multiAttr(result, "clientRoles");
-        assertTrue(clientRoles.contains(clientUUID + "/cr1"));
-        assertTrue(clientRoles.contains(clientUUID + "/cr2"));
+        assertTrue(clientRoles.contains(cr1Uid.getUidValue()));
+        assertTrue(clientRoles.contains(cr2Uid.getUidValue()));
     }
 
     @Test
@@ -429,21 +431,21 @@ class UserIT extends AbstractIntegrationTest {
         Uid clientUid = connector.create(KeycloakClientHandler.CLIENT_OBJECT_CLASS, clientAttrs, new OperationOptionsBuilder().build());
         String clientUUID = clientUid.getUidValue();
 
-        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+        Uid crAUid = connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
                 set(new Name(clientUUID + "/cr-a")), new OperationOptionsBuilder().build());
-        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+        Uid crBUid = connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
                 set(new Name(clientUUID + "/cr-b")), new OperationOptionsBuilder().build());
 
         Set<Attribute> attrs = new HashSet<>();
         attrs.add(new Name("foo"));
         attrs.add(AttributeBuilder.buildEnabled(true));
-        attrs.add(AttributeBuilder.build("clientRoles", list(clientUUID + "/cr-a")));
+        attrs.add(AttributeBuilder.build("clientRoles", list(crAUid.getUidValue())));
         Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
 
         // Add cr-b, remove cr-a
         Set<AttributeDelta> modifications = new HashSet<>();
         modifications.add(AttributeDeltaBuilder.build("clientRoles",
-                list(clientUUID + "/cr-b"), list(clientUUID + "/cr-a")));
+                list(crBUid.getUidValue()), list(crAUid.getUidValue())));
 
         connector.updateDelta(USER_OBJECT_CLASS,
                 new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
@@ -452,8 +454,75 @@ class UserIT extends AbstractIntegrationTest {
                 new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("clientRoles"));
 
         List<Object> clientRoles = multiAttr(result, "clientRoles");
-        assertTrue(clientRoles.contains(clientUUID + "/cr-b"));
-        assertFalse(clientRoles.contains(clientUUID + "/cr-a"));
+        assertTrue(clientRoles.contains(crBUid.getUidValue()));
+        assertFalse(clientRoles.contains(crAUid.getUidValue()));
+    }
+
+    // --- Bulk role unassign (threshold=3: <=3 uses individual get, >3 uses listAll) ---
+
+    @ParameterizedTest(name = "unassign {0} realm roles from user")
+    @ValueSource(ints = {3, 4})
+    void unassignRealmRolesFromUser(int count) {
+        List<String> roleNames = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            String name = "ur-role" + i;
+            connector.create(KeycloakRealmRoleHandler.REALM_ROLE_OBJECT_CLASS,
+                    set(new Name(name)), new OperationOptionsBuilder().build());
+            roleNames.add(name);
+        }
+
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("realmRoles", roleNames));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("realmRoles", null, roleNames));
+        connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("realmRoles"));
+        List<Object> roles = multiAttr(result, "realmRoles");
+        for (String name : roleNames) {
+            assertFalse(roles.contains(name), "Role " + name + " should be unassigned");
+        }
+    }
+
+    @ParameterizedTest(name = "unassign {0} client roles from user")
+    @ValueSource(ints = {3, 4})
+    void unassignClientRolesFromUser(int count) {
+        Set<Attribute> clientAttrs = new HashSet<>();
+        clientAttrs.add(new Name("unassign-client"));
+        clientAttrs.add(AttributeBuilder.build("protocol", "openid-connect"));
+        clientAttrs.add(AttributeBuilder.buildEnabled(true));
+        Uid clientUid = connector.create(KeycloakClientHandler.CLIENT_OBJECT_CLASS, clientAttrs, new OperationOptionsBuilder().build());
+
+        List<String> roleUids = new ArrayList<>();
+        for (int i = 1; i <= count; i++) {
+            Uid crUid = connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+                    set(new Name(clientUid.getUidValue() + "/ucr" + i)), new OperationOptionsBuilder().build());
+            roleUids.add(crUid.getUidValue());
+        }
+
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("clientRoles", roleUids));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("clientRoles", null, roleUids));
+        connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("clientRoles"));
+        List<Object> clientRoles = multiAttr(result, "clientRoles");
+        for (String roleUid : roleUids) {
+            assertFalse(clientRoles.contains(roleUid), "Client role " + roleUid + " should be unassigned");
+        }
     }
 
     // --- Custom Attributes ---

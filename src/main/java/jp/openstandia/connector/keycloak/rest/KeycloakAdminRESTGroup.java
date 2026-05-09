@@ -406,7 +406,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
                 List<RoleRepresentation> clientRoles = groups(realmName).group(rep.getId())
                         .roles().clientLevel(client.getId()).listAll();
                 for (RoleRepresentation cr : clientRoles) {
-                    clientRoleValues.add(client.getId() + "/" + cr.getName());
+                    clientRoleValues.add(client.getId() + "/" + cr.getId());
                 }
             });
             builder.addAttribute(ATTR_CLIENT_ROLES, clientRoleValues);
@@ -528,15 +528,25 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         }
     }
 
+    private static final int BULK_ROLE_UNASSIGN_THRESHOLD = 3;
+
     private void removeRealmRolesFromGroup(String realmName, String groupId, String groupName, List<String> roleNames) {
         if (roleNames.isEmpty()) return;
-        List<RoleRepresentation> rolesToRemove = new ArrayList<>();
-        for (String roleName : roleNames) {
-            try {
-                rolesToRemove.add(realm(realmName).roles().get(roleName).toRepresentation());
-            } catch (NotFoundException e) {
-                LOGGER.warn("Realm role not found, skipping. roleName: {0}, groupId: {1}, groupName: {2}",
-                        roleName, groupId, groupName);
+        List<RoleRepresentation> rolesToRemove;
+        if (roleNames.size() > BULK_ROLE_UNASSIGN_THRESHOLD) {
+            Set<String> toRemove = new HashSet<>(roleNames);
+            rolesToRemove = groups(realmName).group(groupId).roles().realmLevel().listAll().stream()
+                    .filter(r -> toRemove.contains(r.getName()))
+                    .collect(Collectors.toList());
+        } else {
+            rolesToRemove = new ArrayList<>();
+            for (String roleName : roleNames) {
+                try {
+                    rolesToRemove.add(realm(realmName).roles().get(roleName).toRepresentation());
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Realm role not found, skipping. roleName: {0}, groupId: {1}, groupName: {2}",
+                            roleName, groupId, groupName);
+                }
             }
         }
         if (!rolesToRemove.isEmpty()) {
@@ -550,7 +560,7 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         for (String value : clientRoleValues) {
             int idx = value.indexOf("/");
             if (idx <= 0) {
-                LOGGER.warn("Invalid client role format (expected clientUUID/roleName): {0}", value);
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleId): {0}", value);
                 continue;
             }
             byClient.computeIfAbsent(value.substring(0, idx), k -> new ArrayList<>()).add(value.substring(idx + 1));
@@ -558,12 +568,12 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
             String clientUUID = entry.getKey();
             List<RoleRepresentation> rolesToAdd = new ArrayList<>();
-            for (String roleName : entry.getValue()) {
+            for (String roleId : entry.getValue()) {
                 try {
-                    rolesToAdd.add(realm(realmName).clients().get(clientUUID).roles().get(roleName).toRepresentation());
+                    rolesToAdd.add(realm(realmName).rolesById().getRole(roleId));
                 } catch (NotFoundException e) {
-                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleName: {1}, groupId: {2}, groupName: {3}",
-                            clientUUID, roleName, groupId, groupName);
+                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleId: {1}, groupId: {2}, groupName: {3}",
+                            clientUUID, roleId, groupId, groupName);
                 }
             }
             if (!rolesToAdd.isEmpty()) {
@@ -578,20 +588,29 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
         for (String value : clientRoleValues) {
             int idx = value.indexOf("/");
             if (idx <= 0) {
-                LOGGER.warn("Invalid client role format (expected clientUUID/roleName): {0}", value);
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleId): {0}", value);
                 continue;
             }
             byClient.computeIfAbsent(value.substring(0, idx), k -> new ArrayList<>()).add(value.substring(idx + 1));
         }
         for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
             String clientUUID = entry.getKey();
-            List<RoleRepresentation> rolesToRemove = new ArrayList<>();
-            for (String roleName : entry.getValue()) {
-                try {
-                    rolesToRemove.add(realm(realmName).clients().get(clientUUID).roles().get(roleName).toRepresentation());
-                } catch (NotFoundException e) {
-                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleName: {1}, groupId: {2}, groupName: {3}",
-                            clientUUID, roleName, groupId, groupName);
+            List<String> roleIds = entry.getValue();
+            List<RoleRepresentation> rolesToRemove;
+            if (roleIds.size() > BULK_ROLE_UNASSIGN_THRESHOLD) {
+                Set<String> toRemove = new HashSet<>(roleIds);
+                rolesToRemove = groups(realmName).group(groupId).roles().clientLevel(clientUUID).listAll().stream()
+                        .filter(r -> toRemove.contains(r.getId()))
+                        .collect(Collectors.toList());
+            } else {
+                rolesToRemove = new ArrayList<>();
+                for (String roleId : roleIds) {
+                    try {
+                        rolesToRemove.add(realm(realmName).rolesById().getRole(roleId));
+                    } catch (NotFoundException e) {
+                        LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleId: {1}, groupId: {2}, groupName: {3}",
+                                clientUUID, roleId, groupId, groupName);
+                    }
                 }
             }
             if (!rolesToRemove.isEmpty()) {

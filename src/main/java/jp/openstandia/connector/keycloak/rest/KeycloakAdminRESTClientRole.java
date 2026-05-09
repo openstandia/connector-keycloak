@@ -62,8 +62,17 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
         return adminClient.realm(realmName);
     }
 
+    /**
+     * Extract the roleId from the UID which is in "clientUUID/roleId" format.
+     */
+    private String extractRoleId(Uid uid) {
+        String value = uid.getUidValue();
+        int idx = value.indexOf("/");
+        return idx > 0 ? value.substring(idx + 1) : value;
+    }
+
     private RoleRepresentation clientRole(String realmName, Uid uid) {
-        return realm(realmName).rolesById().getRole(uid.getUidValue());
+        return realm(realmName).rolesById().getRole(extractRoleId(uid));
     }
 
     private RoleRepresentation clientRole(String realmName, Name name) {
@@ -97,7 +106,7 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
             realm(realmName).rolesById().updateRole(created.getId(), created);
         }
 
-        return new Uid(created.getId(), new Name(getUniqueName(created)));
+        return new Uid(getUniqueId(created), new Name(getUniqueName(created)));
     }
 
     protected RoleRepresentation toClientRoleRep(KeycloakSchema schema, Set<Attribute> attributes) {
@@ -235,7 +244,7 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
     @Override
     public void deleteClientRole(KeycloakSchema schema, String realmName, Uid uid, OperationOptions options) throws UnknownUidException {
         try {
-            realm(realmName).rolesById().deleteRole(uid.getUidValue());
+            realm(realmName).rolesById().deleteRole(extractRoleId(uid));
 
         } catch (NotFoundException e) {
             LOGGER.warn("[{0}] Not found clientRole when deleting. uid: {1}", instanceName, uid);
@@ -354,6 +363,10 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
      * @param rep
      * @return
      */
+    private String getUniqueId(RoleRepresentation rep) {
+        return rep.getContainerId() + "/" + rep.getId();
+    }
+
     private String getUniqueName(RoleRepresentation rep) {
         return rep.getContainerId() + "/" + rep.getName();
     }
@@ -362,9 +375,7 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
                                               Set<String> attributesToGet, boolean allowPartialAttributeValues, int queryPageSize) {
         final ConnectorObjectBuilder builder = new ConnectorObjectBuilder()
                 .setObjectClass(CLIENT_ROLE_OBJECT_CLASS)
-                // Always returns "id"
-                .setUid(rep.getId())
-                // Always returns "name"
+                .setUid(getUniqueId(rep))
                 .setName(getUniqueName(rep));
 
         if (shouldReturn(attributesToGet, ATTR_DESCRIPTION)) {

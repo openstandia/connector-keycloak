@@ -618,13 +618,13 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 if (shouldReturn(attributesToGet, ATTR_CLIENT_ROLES)) {
                     LOGGER.ok("[{0}] Fetching client roles because attributes to get is requested", instanceName);
 
-                    // Collect client roles in "<clientUUID>/<roleName>" format
+                    // Collect client roles in "<clientUUID>/<roleId>" format (matches ClientRole UID)
                     List<String> clientRoleValues = new ArrayList<>();
                     realm(realmName).clients().findAll().forEach(client -> {
                         List<RoleRepresentation> clientRoles = users(realmName).get(user.getId())
                                 .roles().clientLevel(client.getId()).listAll();
                         for (RoleRepresentation cr : clientRoles) {
-                            clientRoleValues.add(client.getId() + "/" + cr.getName());
+                            clientRoleValues.add(client.getId() + "/" + cr.getId());
                         }
                     });
                     builder.addAttribute(ATTR_CLIENT_ROLES, clientRoleValues);
@@ -653,15 +653,27 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         }
     }
 
+    private static final int BULK_ROLE_UNASSIGN_THRESHOLD = 3;
+
     private void removeRealmRolesFromUser(String realmName, String userId, String username, List<String> roleNames) {
         if (roleNames.isEmpty()) return;
-        List<RoleRepresentation> rolesToRemove = new ArrayList<>();
-        for (String roleName : roleNames) {
-            try {
-                rolesToRemove.add(realm(realmName).roles().get(roleName).toRepresentation());
-            } catch (NotFoundException e) {
-                LOGGER.warn("Realm role not found, skipping. roleName: {0}, userId: {1}, username: {2}",
-                        roleName, userId, username);
+        List<RoleRepresentation> rolesToRemove;
+        if (roleNames.size() > BULK_ROLE_UNASSIGN_THRESHOLD) {
+            // When removing many roles, fetch all assigned roles once and filter locally
+            // instead of making individual get-by-name API calls for each role.
+            Set<String> toRemove = new HashSet<>(roleNames);
+            rolesToRemove = users(realmName).get(userId).roles().realmLevel().listAll().stream()
+                    .filter(r -> toRemove.contains(r.getName()))
+                    .collect(Collectors.toList());
+        } else {
+            rolesToRemove = new ArrayList<>();
+            for (String roleName : roleNames) {
+                try {
+                    rolesToRemove.add(realm(realmName).roles().get(roleName).toRepresentation());
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Realm role not found, skipping. roleName: {0}, userId: {1}, username: {2}",
+                            roleName, userId, username);
+                }
             }
         }
         if (!rolesToRemove.isEmpty()) {
@@ -671,27 +683,24 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
     private void addClientRolesToUser(String realmName, String userId, String username, List<String> clientRoleValues) {
         if (clientRoleValues.isEmpty()) return;
-        // Group by clientUUID
         Map<String, List<String>> byClient = new HashMap<>();
         for (String value : clientRoleValues) {
             int idx = value.indexOf("/");
             if (idx <= 0) {
-                LOGGER.warn("Invalid client role format (expected clientUUID/roleName): {0}", value);
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleId): {0}", value);
                 continue;
             }
-            String clientUUID = value.substring(0, idx);
-            String roleName = value.substring(idx + 1);
-            byClient.computeIfAbsent(clientUUID, k -> new ArrayList<>()).add(roleName);
+            byClient.computeIfAbsent(value.substring(0, idx), k -> new ArrayList<>()).add(value.substring(idx + 1));
         }
         for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
             String clientUUID = entry.getKey();
             List<RoleRepresentation> rolesToAdd = new ArrayList<>();
-            for (String roleName : entry.getValue()) {
+            for (String roleId : entry.getValue()) {
                 try {
-                    rolesToAdd.add(realm(realmName).clients().get(clientUUID).roles().get(roleName).toRepresentation());
+                    rolesToAdd.add(realm(realmName).rolesById().getRole(roleId));
                 } catch (NotFoundException e) {
-                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleName: {1}, userId: {2}, username: {3}",
-                            clientUUID, roleName, userId, username);
+                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleId: {1}, userId: {2}, username: {3}",
+                            clientUUID, roleId, userId, username);
                 }
             }
             if (!rolesToAdd.isEmpty()) {
@@ -706,22 +715,31 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         for (String value : clientRoleValues) {
             int idx = value.indexOf("/");
             if (idx <= 0) {
-                LOGGER.warn("Invalid client role format (expected clientUUID/roleName): {0}", value);
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleId): {0}", value);
                 continue;
             }
-            String clientUUID = value.substring(0, idx);
-            String roleName = value.substring(idx + 1);
-            byClient.computeIfAbsent(clientUUID, k -> new ArrayList<>()).add(roleName);
+            byClient.computeIfAbsent(value.substring(0, idx), k -> new ArrayList<>()).add(value.substring(idx + 1));
         }
         for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
             String clientUUID = entry.getKey();
-            List<RoleRepresentation> rolesToRemove = new ArrayList<>();
-            for (String roleName : entry.getValue()) {
-                try {
-                    rolesToRemove.add(realm(realmName).clients().get(clientUUID).roles().get(roleName).toRepresentation());
-                } catch (NotFoundException e) {
-                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleName: {1}, userId: {2}, username: {3}",
-                            clientUUID, roleName, userId, username);
+            List<String> roleIds = entry.getValue();
+            List<RoleRepresentation> rolesToRemove;
+            if (roleIds.size() > BULK_ROLE_UNASSIGN_THRESHOLD) {
+                // When removing many roles per client, fetch all assigned roles once
+                // and filter locally instead of making individual get-by-id API calls.
+                Set<String> toRemove = new HashSet<>(roleIds);
+                rolesToRemove = users(realmName).get(userId).roles().clientLevel(clientUUID).listAll().stream()
+                        .filter(r -> toRemove.contains(r.getId()))
+                        .collect(Collectors.toList());
+            } else {
+                rolesToRemove = new ArrayList<>();
+                for (String roleId : roleIds) {
+                    try {
+                        rolesToRemove.add(realm(realmName).rolesById().getRole(roleId));
+                    } catch (NotFoundException e) {
+                        LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleId: {1}, userId: {2}, username: {3}",
+                                clientUUID, roleId, userId, username);
+                    }
                 }
             }
             if (!rolesToRemove.isEmpty()) {
