@@ -43,6 +43,8 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     private String clientAttributes;
     private int queryPageSize;
     private boolean passwordResetAPIEnabled;
+    private int httpConnectTimeoutInMilliseconds = 10000;
+    private int httpReadTimeoutInMilliseconds = 30000;
     private boolean grpcEnabled;
     private String grpcHost;
     private int grpcPort;
@@ -251,6 +253,34 @@ public class KeycloakConfiguration extends AbstractConfiguration {
 
     @ConfigurationProperty(
             order = 13,
+            displayMessageKey = "HTTP Connect Timeout (in milliseconds)",
+            helpMessageKey = "Connection timeout when connecting to the Keycloak server. (Default: 10000)",
+            required = false,
+            confidential = false)
+    public int getHttpConnectTimeoutInMilliseconds() {
+        return httpConnectTimeoutInMilliseconds;
+    }
+
+    public void setHttpConnectTimeoutInMilliseconds(int httpConnectTimeoutInMilliseconds) {
+        this.httpConnectTimeoutInMilliseconds = httpConnectTimeoutInMilliseconds;
+    }
+
+    @ConfigurationProperty(
+            order = 14,
+            displayMessageKey = "HTTP Read Timeout (in milliseconds)",
+            helpMessageKey = "Read timeout when fetching data from the Keycloak server. (Default: 30000)",
+            required = false,
+            confidential = false)
+    public int getHttpReadTimeoutInMilliseconds() {
+        return httpReadTimeoutInMilliseconds;
+    }
+
+    public void setHttpReadTimeoutInMilliseconds(int httpReadTimeoutInMilliseconds) {
+        this.httpReadTimeoutInMilliseconds = httpReadTimeoutInMilliseconds;
+    }
+
+    @ConfigurationProperty(
+            order = 16,
             displayMessageKey = "Enable gRPC",
             helpMessageKey = "Enable gRPC for the Keycloak API. CAUTION: You need to install keycloak-grpc on the Keycloak server.",
             required = false,
@@ -264,7 +294,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 14,
+            order = 17,
             displayMessageKey = "gRPC Host",
             helpMessageKey = "Hostname for gRPC connection.",
             required = false,
@@ -278,7 +308,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 15,
+            order = 18,
             displayMessageKey = "gRPC Port",
             helpMessageKey = "Port for gRPC connection.",
             required = false,
@@ -292,7 +322,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 16,
+            order = 19,
             displayMessageKey = "HTTP Proxy Host",
             helpMessageKey = "Hostname for the HTTP Proxy",
             required = false,
@@ -306,7 +336,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 17,
+            order = 20,
             displayMessageKey = "HTTP Proxy Port",
             helpMessageKey = "Port for the HTTP Proxy",
             required = false,
@@ -320,7 +350,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 18,
+            order = 21,
             displayMessageKey = "HTTP Proxy User",
             helpMessageKey = "Username for the HTTP Proxy Authentication",
             required = false,
@@ -334,7 +364,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 19,
+            order = 22,
             displayMessageKey = "HTTP Proxy Password",
             helpMessageKey = "Password for the HTTP Proxy Authentication",
             required = false,

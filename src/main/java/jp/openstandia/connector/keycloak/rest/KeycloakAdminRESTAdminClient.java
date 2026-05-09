@@ -76,6 +76,9 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
 
         ResteasyClientBuilder resteasyClientBuilder = new ResteasyClientBuilderImpl();
         resteasyClientBuilder.connectionPoolSize(20);
+        resteasyClientBuilder.connectTimeout(configuration.getHttpConnectTimeoutInMilliseconds(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        resteasyClientBuilder.readTimeout(configuration.getHttpReadTimeoutInMilliseconds(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        resteasyClientBuilder.connectionCheckoutTimeout(5, java.util.concurrent.TimeUnit.SECONDS);
 
         // Register a Jackson JSON provider with a pre-configured ObjectMapper.
         //
