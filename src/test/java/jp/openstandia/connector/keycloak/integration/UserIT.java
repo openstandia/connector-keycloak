@@ -334,6 +334,144 @@ class UserIT extends AbstractIntegrationTest {
         assertNull(result);
     }
 
+    // --- Required Actions ---
+
+    @Test
+    void addUserWithRequiredActions() {
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("requiredActions", list("UPDATE_PASSWORD", "VERIFY_EMAIL")));
+
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation());
+
+        List<Object> actions = multiAttr(result, "requiredActions");
+        assertTrue(actions.contains("UPDATE_PASSWORD"));
+        assertTrue(actions.contains("VERIFY_EMAIL"));
+    }
+
+    @Test
+    void updateUserRequiredActionsAddOnly() {
+        // Create user with one action
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("requiredActions", list("UPDATE_PASSWORD")));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        // Add VERIFY_EMAIL without removing UPDATE_PASSWORD
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("requiredActions", list("VERIFY_EMAIL"), null));
+
+        connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation());
+
+        List<Object> actions = multiAttr(result, "requiredActions");
+        assertTrue(actions.contains("UPDATE_PASSWORD"), "Existing action should be preserved");
+        assertTrue(actions.contains("VERIFY_EMAIL"), "New action should be added");
+    }
+
+    @Test
+    void updateUserRequiredActionsRemove() {
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("requiredActions", list("UPDATE_PASSWORD", "VERIFY_EMAIL")));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        // Remove UPDATE_PASSWORD, keep VERIFY_EMAIL
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("requiredActions", null, list("UPDATE_PASSWORD")));
+
+        connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation());
+
+        List<Object> actions = multiAttr(result, "requiredActions");
+        assertFalse(actions.contains("UPDATE_PASSWORD"), "Removed action should be gone");
+        assertTrue(actions.contains("VERIFY_EMAIL"), "Remaining action should be preserved");
+    }
+
+    @Test
+    void updateUserRequiredActionsAddAndRemove() {
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("requiredActions", list("UPDATE_PASSWORD", "VERIFY_EMAIL")));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        // Add CONFIGURE_TOTP, remove UPDATE_PASSWORD simultaneously
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("requiredActions",
+                list("CONFIGURE_TOTP"), list("UPDATE_PASSWORD")));
+
+        connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation());
+
+        List<Object> actions = multiAttr(result, "requiredActions");
+        assertFalse(actions.contains("UPDATE_PASSWORD"));
+        assertTrue(actions.contains("VERIFY_EMAIL"));
+        assertTrue(actions.contains("CONFIGURE_TOTP"));
+    }
+
+    @Test
+    void updateUserRequiredActionsRemoveNonExistent() {
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("requiredActions", list("VERIFY_EMAIL")));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        // Remove a non-existent action — should not throw
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("requiredActions",
+                null, list("NON_EXISTENT_ACTION")));
+
+        assertDoesNotThrow(() -> connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build()));
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation());
+
+        List<Object> actions = multiAttr(result, "requiredActions");
+        assertTrue(actions.contains("VERIFY_EMAIL"), "Existing action should be preserved");
+    }
+
+    @Test
+    void updateUserRequiredActionsAddDuplicate() {
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("requiredActions", list("VERIFY_EMAIL")));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        // Add an action that already exists — should not duplicate
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("requiredActions",
+                list("VERIFY_EMAIL"), null));
+
+        assertDoesNotThrow(() -> connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build()));
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation());
+
+        List<Object> actions = multiAttr(result, "requiredActions");
+        assertEquals(1, actions.stream().filter(a -> a.equals("VERIFY_EMAIL")).count(),
+                "Should not have duplicate actions");
+    }
+
     // --- Realm Roles ---
 
     @Test

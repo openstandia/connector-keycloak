@@ -43,8 +43,8 @@ class SchemaIT extends AbstractIntegrationTest {
                 .orElseThrow();
 
         // Uid, Name, __PASSWORD__, __ENABLE__, email, emailVerified, firstName, lastName,
-        // createdTimestamp, groups, realmRoles, clientRoles = 12
-        assertEquals(12, userInfo.getAttributeInfo().size());
+        // requiredActions, createdTimestamp, groups, realmRoles, clientRoles = 13
+        assertEquals(13, userInfo.getAttributeInfo().size());
     }
 
     @Test
@@ -60,8 +60,8 @@ class SchemaIT extends AbstractIntegrationTest {
                 .findFirst()
                 .orElseThrow();
 
-        // 12 + 2 custom attributes = 14
-        assertEquals(14, userInfo.getAttributeInfo().size());
+        // 13 + 2 custom attributes = 15
+        assertEquals(15, userInfo.getAttributeInfo().size());
     }
 
     @Test

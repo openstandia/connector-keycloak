@@ -204,6 +204,11 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 LOGGER.ok("Set groups: {0}", groups);
                 newUser.setGroups(groups);
 
+            } else if (attr.getName().equals(ATTR_REQUIRED_ACTIONS)) {
+                List<String> actions = attr.getValue().stream()
+                        .map(Object::toString).collect(Collectors.toList());
+                newUser.setRequiredActions(actions);
+
             } else if (attr.getName().equals(ATTR_REALM_ROLES) || attr.getName().equals(ATTR_CLIENT_ROLES)) {
                 // Roles are mapped via RoleMappingResource, handled in createUser method.
 
@@ -309,6 +314,24 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                             removeGroupIds.add(group.toString());
                         }
                     }
+
+                } else if (delta.getName().equals(ATTR_REQUIRED_ACTIONS)) {
+                    // Start from current actions to preserve existing ones
+                    List<String> actions = new ArrayList<>(
+                            current.getRequiredActions() != null ? current.getRequiredActions() : Collections.emptyList());
+                    if (delta.getValuesToRemove() != null) {
+                        actions.removeAll(delta.getValuesToRemove().stream()
+                                .map(Object::toString).collect(Collectors.toSet()));
+                    }
+                    if (delta.getValuesToAdd() != null) {
+                        for (Object a : delta.getValuesToAdd()) {
+                            String action = a.toString();
+                            if (!actions.contains(action)) {
+                                actions.add(action);
+                            }
+                        }
+                    }
+                    current.setRequiredActions(actions);
 
                 } else if (delta.getName().equals(ATTR_REALM_ROLES)) {
                     if (delta.getValuesToAdd() != null) {
@@ -557,6 +580,12 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         }
         if (shouldReturn(attributesToGet, ATTR_LAST_NAME)) {
             builder.addAttribute(ATTR_LAST_NAME, user.getLastName());
+        }
+        if (shouldReturn(attributesToGet, ATTR_REQUIRED_ACTIONS)) {
+            List<String> requiredActions = user.getRequiredActions();
+            if (requiredActions != null) {
+                builder.addAttribute(ATTR_REQUIRED_ACTIONS, requiredActions);
+            }
         }
 
         Map<String, List<String>> attributes = user.getAttributes();

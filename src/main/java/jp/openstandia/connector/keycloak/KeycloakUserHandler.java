@@ -50,6 +50,9 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
     public static final String ATTR_FIRST_NAME = "firstName";
     public static final String ATTR_LAST_NAME = "lastName";
 
+    // Required Actions (e.g. UPDATE_PASSWORD, VERIFY_EMAIL, CONFIGURE_TOTP)
+    public static final String ATTR_REQUIRED_ACTIONS = "requiredActions";
+
     // Metadata
     public static final String ATTR_CREATED_TIMESTAMP = "createdTimestamp";
 
@@ -80,6 +83,7 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
         attrs.add(ATTR_GROUPS);
         attrs.add(ATTR_REALM_ROLES);
         attrs.add(ATTR_CLIENT_ROLES);
+        attrs.add(ATTR_REQUIRED_ACTIONS);
         attrs.add(ATTR_PASSWORD_PERMANENT);
         attrs.addAll(OperationalAttributes.OPERATIONAL_ATTRIBUTE_NAMES);
 
@@ -181,6 +185,14 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
                             .build()
             );
         }
+
+        // Required Actions
+        // NOTE: Keycloak automatically removes requiredActions when the user completes them.
+        // Use conditional outbound mapping in MidPoint to avoid re-setting on recompute/reconciliation.
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_REQUIRED_ACTIONS)
+                .setMultiValued(true)
+                .setRequired(false)
+                .build());
 
         // Metadata
         builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_CREATED_TIMESTAMP)
