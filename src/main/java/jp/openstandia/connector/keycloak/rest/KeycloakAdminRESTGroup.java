@@ -88,13 +88,17 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
         String uuid = checkCreateResult(res, "createGroup");
 
-        // Add client roles if specified
+        // Add roles if specified
+        List<String> addRealmRoles = new ArrayList<>();
         List<String> addClientRoles = new ArrayList<>();
         for (Attribute attr : createAttributes) {
-            if (attr.getName().equals(ATTR_CLIENT_ROLES)) {
+            if (attr.getName().equals(ATTR_REALM_ROLES)) {
+                addRealmRoles = attr.getValue().stream().map(Object::toString).collect(Collectors.toList());
+            } else if (attr.getName().equals(ATTR_CLIENT_ROLES)) {
                 addClientRoles = attr.getValue().stream().map(Object::toString).collect(Collectors.toList());
             }
         }
+        addRealmRolesToGroup(realmName, uuid, rep.getName(), addRealmRoles);
         addClientRolesToGroup(realmName, uuid, rep.getName(), addClientRoles);
 
         return new Uid(uuid, new Name(rep.getName()));
@@ -153,6 +157,22 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
                 } else if (delta.getName().equals(ATTR_PARENT_GROUP)) {
                     newParentGroupId = AttributeDeltaUtil.getAsStringValue(delta);
+
+                } else if (delta.getName().equals(ATTR_REALM_ROLES)) {
+                    List<String> addRoles = new ArrayList<>();
+                    List<String> removeRoles = new ArrayList<>();
+                    if (delta.getValuesToAdd() != null) {
+                        for (Object role : delta.getValuesToAdd()) {
+                            addRoles.add(role.toString());
+                        }
+                    }
+                    if (delta.getValuesToRemove() != null) {
+                        for (Object role : delta.getValuesToRemove()) {
+                            removeRoles.add(role.toString());
+                        }
+                    }
+                    addRealmRolesToGroup(realmName, uid.getUidValue(), current.getName(), addRoles);
+                    removeRealmRolesFromGroup(realmName, uid.getUidValue(), current.getName(), removeRoles);
 
                 } else if (delta.getName().equals(ATTR_CLIENT_ROLES)) {
                     List<String> addRoles = new ArrayList<>();
@@ -373,6 +393,13 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
 
         builder.addAttribute(ATTR_PATH, rep.getPath());
 
+        if (shouldReturn(attributesToGet, ATTR_REALM_ROLES)) {
+            List<RoleRepresentation> realmRoles = groups(realmName).group(rep.getId())
+                    .roles().realmLevel().listAll();
+            builder.addAttribute(ATTR_REALM_ROLES, realmRoles.stream()
+                    .map(RoleRepresentation::getName).collect(Collectors.toList()));
+        }
+
         if (shouldReturn(attributesToGet, ATTR_CLIENT_ROLES)) {
             List<String> clientRoleValues = new ArrayList<>();
             realm(realmName).clients().findAll().forEach(client -> {
@@ -484,6 +511,38 @@ public class KeycloakAdminRESTGroup implements KeycloakClient.Group {
     }
 
     // --- Helper methods for client role management ---
+
+    private void addRealmRolesToGroup(String realmName, String groupId, String groupName, List<String> roleNames) {
+        if (roleNames.isEmpty()) return;
+        List<RoleRepresentation> rolesToAdd = new ArrayList<>();
+        for (String roleName : roleNames) {
+            try {
+                rolesToAdd.add(realm(realmName).roles().get(roleName).toRepresentation());
+            } catch (NotFoundException e) {
+                LOGGER.warn("Realm role not found, skipping. roleName: {0}, groupId: {1}, groupName: {2}",
+                        roleName, groupId, groupName);
+            }
+        }
+        if (!rolesToAdd.isEmpty()) {
+            groups(realmName).group(groupId).roles().realmLevel().add(rolesToAdd);
+        }
+    }
+
+    private void removeRealmRolesFromGroup(String realmName, String groupId, String groupName, List<String> roleNames) {
+        if (roleNames.isEmpty()) return;
+        List<RoleRepresentation> rolesToRemove = new ArrayList<>();
+        for (String roleName : roleNames) {
+            try {
+                rolesToRemove.add(realm(realmName).roles().get(roleName).toRepresentation());
+            } catch (NotFoundException e) {
+                LOGGER.warn("Realm role not found, skipping. roleName: {0}, groupId: {1}, groupName: {2}",
+                        roleName, groupId, groupName);
+            }
+        }
+        if (!rolesToRemove.isEmpty()) {
+            groups(realmName).group(groupId).roles().realmLevel().remove(rolesToRemove);
+        }
+    }
 
     private void addClientRolesToGroup(String realmName, String groupId, String groupName, List<String> clientRoleValues) {
         if (clientRoleValues.isEmpty()) return;

@@ -73,8 +73,8 @@ class SchemaIT extends AbstractIntegrationTest {
                 .findFirst()
                 .orElseThrow();
 
-        // Uid, Name, path, parentGroup = 4
-        assertEquals(4, groupInfo.getAttributeInfo().size());
+        // Uid, Name, path, parentGroup, realmRoles, clientRoles = 6
+        assertEquals(6, groupInfo.getAttributeInfo().size());
     }
 
     @Test
@@ -90,8 +90,8 @@ class SchemaIT extends AbstractIntegrationTest {
                 .findFirst()
                 .orElseThrow();
 
-        // 4 + 2 custom attributes = 6
-        assertEquals(6, groupInfo.getAttributeInfo().size());
+        // 6 + 2 custom attributes = 8
+        assertEquals(8, groupInfo.getAttributeInfo().size());
     }
 
     @Test
