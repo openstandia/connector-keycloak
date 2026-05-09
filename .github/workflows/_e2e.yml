@@ -24,7 +24,6 @@ jobs:
             compose-file: 'docker-compose-postgresql.yml'
     env:
       MIDPOINT_IMAGE: ${{ matrix.midpoint-image }}
-      CONNECTOR_JAR: ${{ github.workspace }}/target/connector-keycloak-1.1.7-SNAPSHOT.jar
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -38,6 +37,11 @@ jobs:
 
       - name: Build connector JAR
         run: mvn -B package -DskipTests -Dgpg.skip=true
+
+      - name: Set CONNECTOR_JAR
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "CONNECTOR_JAR=${{ github.workspace }}/target/connector-keycloak-${VERSION}.jar" >> $GITHUB_ENV
 
       - name: Start containers
         working-directory: src/test/e2e

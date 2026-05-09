@@ -21,7 +21,7 @@ services:
      - net
     volumes:
      - midpoint_home_40:/opt/midpoint/var
-     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ${CONNECTOR_JAR}:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
      - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
 
   # MidPoint 4.4.11 (H2, default password: 5ecr3t)
@@ -34,7 +34,7 @@ services:
      - net
     volumes:
      - midpoint_home_44:/opt/midpoint/var
-     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ${CONNECTOR_JAR}:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
      - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
 
   # MidPoint 4.8.11 (H2)
@@ -49,7 +49,7 @@ services:
      - net
     volumes:
      - midpoint_home_48:/opt/midpoint/var
-     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ${CONNECTOR_JAR}:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
      - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
 
   # MidPoint 4.10.2 (PostgreSQL required)
@@ -113,7 +113,7 @@ services:
      - net
     volumes:
      - midpoint_home_410:/opt/midpoint/var
-     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ${CONNECTOR_JAR}:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
      - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
 
 networks:
