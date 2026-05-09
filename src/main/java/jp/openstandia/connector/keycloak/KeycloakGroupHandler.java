@@ -48,6 +48,9 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
     public static final String ATTR_PARENT_GROUP = "parentGroup";
     public static final String ATTR_SUB_GROUPS = "subGroups";
 
+    // clientRoles is a list of keycloak client role names in format "<clientUUID>/<roleName>"
+    public static final String ATTR_CLIENT_ROLES = "clientRoles";
+
     public KeycloakGroupHandler(String instanceName, KeycloakConfiguration configuration, KeycloakClient client,
                                 KeycloakSchema schema) {
         super(instanceName, configuration, client, schema);
@@ -105,6 +108,10 @@ public class KeycloakGroupHandler extends AbstractKeycloakHandler {
         // Association
         builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_PARENT_GROUP)
                 .setMultiValued(false)
+                .setReturnedByDefault(false)
+                .build());
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_CLIENT_ROLES)
+                .setMultiValued(true)
                 .setReturnedByDefault(false)
                 .build());
 
