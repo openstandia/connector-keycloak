@@ -60,6 +60,9 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
     // realmRoles is a list of keycloak realm role names
     public static final String ATTR_REALM_ROLES = "realmRoles";
 
+    // clientRoles is a list of keycloak client role names in format "<clientUUID>/<roleName>"
+    public static final String ATTR_CLIENT_ROLES = "clientRoles";
+
     // Password
     public static final String ATTR_PASSWORD = "__PASSWORD__";
     public static final String ATTR_PASSWORD_PERMANENT = "password_permanent";
@@ -76,6 +79,7 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
         attrs.add(ATTR_CREATED_TIMESTAMP);
         attrs.add(ATTR_GROUPS);
         attrs.add(ATTR_REALM_ROLES);
+        attrs.add(ATTR_CLIENT_ROLES);
         attrs.add(ATTR_PASSWORD_PERMANENT);
         attrs.addAll(OperationalAttributes.OPERATIONAL_ATTRIBUTE_NAMES);
 
@@ -191,6 +195,10 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
                 .setReturnedByDefault(false)
                 .build());
         builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_REALM_ROLES)
+                .setMultiValued(true)
+                .setReturnedByDefault(false)
+                .build());
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_CLIENT_ROLES)
                 .setMultiValued(true)
                 .setReturnedByDefault(false)
                 .build());

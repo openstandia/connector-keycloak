@@ -100,10 +100,13 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         // Remove groups intentionally because keycloak expects group path list
         newUser.setGroups(null);
 
-        List<String> addRoles = new ArrayList<>();
+        List<String> addRealmRoles = new ArrayList<>();
+        List<String> addClientRoles = new ArrayList<>();
         for (Attribute attr : createAttributes) {
             if (attr.getName().equals(ATTR_REALM_ROLES)) {
-                addRoles = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
+                addRealmRoles = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
+            } else if (attr.getName().equals(ATTR_CLIENT_ROLES)) {
+                addClientRoles = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
             }
         }
 
@@ -151,21 +154,8 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             }
         }
 
-        if (!addRoles.isEmpty()) {
-            List<RoleRepresentation> rolesToAdd = new ArrayList<>();
-            for (String roleName : addRoles) {
-                try {
-                    RoleRepresentation role = realm(realmName).roles().get(roleName).toRepresentation();
-                    rolesToAdd.add(role);
-                } catch (NotFoundException e) {
-                    LOGGER.warn("The role is not found. Skipping join the user. roleName: {0}, userId: {1}, username: {2}",
-                            roleName, uuid, newUser.getUsername());
-                }
-            }
-            if (!rolesToAdd.isEmpty()) {
-                users(realmName).get(uuid).roles().realmLevel().add(rolesToAdd);
-            }
-        }
+        addRealmRolesToUser(realmName, uuid, newUser.getUsername(), addRealmRoles);
+        addClientRolesToUser(realmName, uuid, newUser.getUsername(), addClientRoles);
 
         return new Uid(uuid, new Name(newUser.getUsername()));
     }
@@ -214,10 +204,8 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 LOGGER.ok("Set groups: {0}", groups);
                 newUser.setGroups(groups);
 
-            } else if (attr.getName().equals(ATTR_REALM_ROLES)) {
-                // Keycloak expects roles to be mapped via RoleMappingResource.
-                // We handle it in createUser method.
-                // Do nothing here explicitly to avoid falling into the default branch.
+            } else if (attr.getName().equals(ATTR_REALM_ROLES) || attr.getName().equals(ATTR_CLIENT_ROLES)) {
+                // Roles are mapped via RoleMappingResource, handled in createUser method.
 
             } else {
                 if (!schema.isUserSchema(attr)) {
@@ -263,8 +251,10 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         UserRepresentation current;
         List<String> addGroupIds = new ArrayList<>();
         List<String> removeGroupIds = new ArrayList<>();
-        List<String> addRoles = new ArrayList<>();
-        List<String> removeRoles = new ArrayList<>();
+        List<String> addRealmRoles = new ArrayList<>();
+        List<String> removeRealmRoles = new ArrayList<>();
+        List<String> addClientRoles = new ArrayList<>();
+        List<String> removeClientRoles = new ArrayList<>();
         CredentialRepresentation credential = null;
 
         try {
@@ -323,12 +313,24 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 } else if (delta.getName().equals(ATTR_REALM_ROLES)) {
                     if (delta.getValuesToAdd() != null) {
                         for (Object role : delta.getValuesToAdd()) {
-                            addRoles.add(role.toString());
+                            addRealmRoles.add(role.toString());
                         }
                     }
                     if (delta.getValuesToRemove() != null) {
                         for (Object role : delta.getValuesToRemove()) {
-                            removeRoles.add(role.toString());
+                            removeRealmRoles.add(role.toString());
+                        }
+                    }
+
+                } else if (delta.getName().equals(ATTR_CLIENT_ROLES)) {
+                    if (delta.getValuesToAdd() != null) {
+                        for (Object role : delta.getValuesToAdd()) {
+                            addClientRoles.add(role.toString());
+                        }
+                    }
+                    if (delta.getValuesToRemove() != null) {
+                        for (Object role : delta.getValuesToRemove()) {
+                            removeClientRoles.add(role.toString());
                         }
                     }
 
@@ -408,37 +410,10 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             }
         }
 
-        if (!addRoles.isEmpty()) {
-            List<RoleRepresentation> rolesToAdd = new ArrayList<>();
-            for (String roleName : addRoles) {
-                try {
-                    RoleRepresentation role = realm(realmName).roles().get(roleName).toRepresentation();
-                    rolesToAdd.add(role);
-                } catch (NotFoundException e) {
-                    LOGGER.warn("The role is not found. Skipping join the user. roleName: {0}, userId: {1}, username: {2}",
-                            roleName, current.getId(), current.getUsername());
-                }
-            }
-            if (!rolesToAdd.isEmpty()) {
-                users(realmName).get(current.getId()).roles().realmLevel().add(rolesToAdd);
-            }
-        }
-
-        if (!removeRoles.isEmpty()) {
-            List<RoleRepresentation> rolesToRemove = new ArrayList<>();
-            for (String roleName : removeRoles) {
-                try {
-                    RoleRepresentation role = realm(realmName).roles().get(roleName).toRepresentation();
-                    rolesToRemove.add(role);
-                } catch (NotFoundException e) {
-                    LOGGER.warn("The role is not found. Skipping remove the user. roleName: {0}, userId: {1}, username: {2}",
-                            roleName, current.getId(), current.getUsername());
-                }
-            }
-            if (!rolesToRemove.isEmpty()) {
-                users(realmName).get(current.getId()).roles().realmLevel().remove(rolesToRemove);
-            }
-        }
+        addRealmRolesToUser(realmName, current.getId(), current.getUsername(), addRealmRoles);
+        removeRealmRolesFromUser(realmName, current.getId(), current.getUsername(), removeRealmRoles);
+        addClientRolesToUser(realmName, current.getId(), current.getUsername(), addClientRoles);
+        removeClientRolesFromUser(realmName, current.getId(), current.getUsername(), removeClientRoles);
     }
 
     @Override
@@ -614,6 +589,11 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             arb.setName(ATTR_REALM_ROLES).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
             arb.addValue(Collections.EMPTY_LIST);
             builder.addAttribute(arb.build());
+
+            AttributeBuilder acrb = new AttributeBuilder();
+            acrb.setName(ATTR_CLIENT_ROLES).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
+            acrb.addValue(Collections.EMPTY_LIST);
+            builder.addAttribute(acrb.build());
         } else {
             if (attributesToGet == null) {
                 // Suppress fetching groups/roles default
@@ -629,15 +609,124 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 }
 
                 if (shouldReturn(attributesToGet, ATTR_REALM_ROLES)) {
-                    // Fetch roles
-                    LOGGER.ok("[{0}] Fetching roles because attributes to get is requested", instanceName);
+                    LOGGER.ok("[{0}] Fetching realm roles because attributes to get is requested", instanceName);
 
                     List<RoleRepresentation> roles = users(realmName).get(user.getId()).roles().realmLevel().listAll();
                     builder.addAttribute(ATTR_REALM_ROLES, roles.stream().map(r -> r.getName()).collect(Collectors.toList()));
+                }
+
+                if (shouldReturn(attributesToGet, ATTR_CLIENT_ROLES)) {
+                    LOGGER.ok("[{0}] Fetching client roles because attributes to get is requested", instanceName);
+
+                    // Collect client roles in "<clientUUID>/<roleName>" format
+                    List<String> clientRoleValues = new ArrayList<>();
+                    realm(realmName).clients().findAll().forEach(client -> {
+                        List<RoleRepresentation> clientRoles = users(realmName).get(user.getId())
+                                .roles().clientLevel(client.getId()).listAll();
+                        for (RoleRepresentation cr : clientRoles) {
+                            clientRoleValues.add(client.getId() + "/" + cr.getName());
+                        }
+                    });
+                    builder.addAttribute(ATTR_CLIENT_ROLES, clientRoleValues);
                 }
             }
         }
 
         return builder.build();
+    }
+
+    // --- Helper methods for role management ---
+
+    private void addRealmRolesToUser(String realmName, String userId, String username, List<String> roleNames) {
+        if (roleNames.isEmpty()) return;
+        List<RoleRepresentation> rolesToAdd = new ArrayList<>();
+        for (String roleName : roleNames) {
+            try {
+                rolesToAdd.add(realm(realmName).roles().get(roleName).toRepresentation());
+            } catch (NotFoundException e) {
+                LOGGER.warn("Realm role not found, skipping. roleName: {0}, userId: {1}, username: {2}",
+                        roleName, userId, username);
+            }
+        }
+        if (!rolesToAdd.isEmpty()) {
+            users(realmName).get(userId).roles().realmLevel().add(rolesToAdd);
+        }
+    }
+
+    private void removeRealmRolesFromUser(String realmName, String userId, String username, List<String> roleNames) {
+        if (roleNames.isEmpty()) return;
+        List<RoleRepresentation> rolesToRemove = new ArrayList<>();
+        for (String roleName : roleNames) {
+            try {
+                rolesToRemove.add(realm(realmName).roles().get(roleName).toRepresentation());
+            } catch (NotFoundException e) {
+                LOGGER.warn("Realm role not found, skipping. roleName: {0}, userId: {1}, username: {2}",
+                        roleName, userId, username);
+            }
+        }
+        if (!rolesToRemove.isEmpty()) {
+            users(realmName).get(userId).roles().realmLevel().remove(rolesToRemove);
+        }
+    }
+
+    private void addClientRolesToUser(String realmName, String userId, String username, List<String> clientRoleValues) {
+        if (clientRoleValues.isEmpty()) return;
+        // Group by clientUUID
+        Map<String, List<String>> byClient = new HashMap<>();
+        for (String value : clientRoleValues) {
+            int idx = value.indexOf("/");
+            if (idx <= 0) {
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleName): {0}", value);
+                continue;
+            }
+            String clientUUID = value.substring(0, idx);
+            String roleName = value.substring(idx + 1);
+            byClient.computeIfAbsent(clientUUID, k -> new ArrayList<>()).add(roleName);
+        }
+        for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
+            String clientUUID = entry.getKey();
+            List<RoleRepresentation> rolesToAdd = new ArrayList<>();
+            for (String roleName : entry.getValue()) {
+                try {
+                    rolesToAdd.add(realm(realmName).clients().get(clientUUID).roles().get(roleName).toRepresentation());
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleName: {1}, userId: {2}, username: {3}",
+                            clientUUID, roleName, userId, username);
+                }
+            }
+            if (!rolesToAdd.isEmpty()) {
+                users(realmName).get(userId).roles().clientLevel(clientUUID).add(rolesToAdd);
+            }
+        }
+    }
+
+    private void removeClientRolesFromUser(String realmName, String userId, String username, List<String> clientRoleValues) {
+        if (clientRoleValues.isEmpty()) return;
+        Map<String, List<String>> byClient = new HashMap<>();
+        for (String value : clientRoleValues) {
+            int idx = value.indexOf("/");
+            if (idx <= 0) {
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleName): {0}", value);
+                continue;
+            }
+            String clientUUID = value.substring(0, idx);
+            String roleName = value.substring(idx + 1);
+            byClient.computeIfAbsent(clientUUID, k -> new ArrayList<>()).add(roleName);
+        }
+        for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
+            String clientUUID = entry.getKey();
+            List<RoleRepresentation> rolesToRemove = new ArrayList<>();
+            for (String roleName : entry.getValue()) {
+                try {
+                    rolesToRemove.add(realm(realmName).clients().get(clientUUID).roles().get(roleName).toRepresentation());
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleName: {1}, userId: {2}, username: {3}",
+                            clientUUID, roleName, userId, username);
+                }
+            }
+            if (!rolesToRemove.isEmpty()) {
+                users(realmName).get(userId).roles().clientLevel(clientUUID).remove(rolesToRemove);
+            }
+        }
     }
 }

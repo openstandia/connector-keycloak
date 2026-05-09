@@ -15,7 +15,10 @@
  */
 package jp.openstandia.connector.keycloak.integration;
 
+import jp.openstandia.connector.keycloak.KeycloakClientHandler;
+import jp.openstandia.connector.keycloak.KeycloakClientRoleHandler;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
+import jp.openstandia.connector.keycloak.KeycloakRealmRoleHandler;
 import jp.openstandia.connector.keycloak.KeycloakUserHandler;
 import org.identityconnectors.framework.api.ConnectorFacade;
 import org.identityconnectors.framework.common.exceptions.AlreadyExistsException;
@@ -327,6 +330,130 @@ class UserIT extends AbstractIntegrationTest {
         result = connector.getObject(USER_OBJECT_CLASS,
                 new Uid(uid.getUidValue(), new Name("lifecycle-user")), defaultGetOperation());
         assertNull(result);
+    }
+
+    // --- Realm Roles ---
+
+    @Test
+    void addUserWithRealmRoles() {
+        // Create realm roles
+        connector.create(KeycloakRealmRoleHandler.REALM_ROLE_OBJECT_CLASS,
+                set(new Name("test-role1")), new OperationOptionsBuilder().build());
+        connector.create(KeycloakRealmRoleHandler.REALM_ROLE_OBJECT_CLASS,
+                set(new Name("test-role2")), new OperationOptionsBuilder().build());
+
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("realmRoles", list("test-role1", "test-role2")));
+
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("realmRoles"));
+
+        List<Object> roles = multiAttr(result, "realmRoles");
+        assertTrue(roles.contains("test-role1"));
+        assertTrue(roles.contains("test-role2"));
+    }
+
+    @Test
+    void updateUserRealmRoles() {
+        connector.create(KeycloakRealmRoleHandler.REALM_ROLE_OBJECT_CLASS,
+                set(new Name("role-a")), new OperationOptionsBuilder().build());
+        connector.create(KeycloakRealmRoleHandler.REALM_ROLE_OBJECT_CLASS,
+                set(new Name("role-b")), new OperationOptionsBuilder().build());
+
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("realmRoles", list("role-a")));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        // Add role-b, remove role-a
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("realmRoles", list("role-b"), list("role-a")));
+
+        connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("realmRoles"));
+
+        List<Object> roles = multiAttr(result, "realmRoles");
+        assertTrue(roles.contains("role-b"));
+        assertFalse(roles.contains("role-a"));
+    }
+
+    // --- Client Roles ---
+
+    @Test
+    void addUserWithClientRoles() {
+        // Create a client
+        Set<Attribute> clientAttrs = new HashSet<>();
+        clientAttrs.add(new Name("role-test-client"));
+        clientAttrs.add(AttributeBuilder.build("protocol", "openid-connect"));
+        clientAttrs.add(AttributeBuilder.buildEnabled(true));
+        Uid clientUid = connector.create(KeycloakClientHandler.CLIENT_OBJECT_CLASS, clientAttrs, new OperationOptionsBuilder().build());
+        String clientUUID = clientUid.getUidValue();
+
+        // Create client roles
+        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+                set(new Name(clientUUID + "/cr1")), new OperationOptionsBuilder().build());
+        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+                set(new Name(clientUUID + "/cr2")), new OperationOptionsBuilder().build());
+
+        // Create user with client roles
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("clientRoles", list(clientUUID + "/cr1", clientUUID + "/cr2")));
+
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("clientRoles"));
+
+        List<Object> clientRoles = multiAttr(result, "clientRoles");
+        assertTrue(clientRoles.contains(clientUUID + "/cr1"));
+        assertTrue(clientRoles.contains(clientUUID + "/cr2"));
+    }
+
+    @Test
+    void updateUserClientRoles() {
+        // Create a client
+        Set<Attribute> clientAttrs = new HashSet<>();
+        clientAttrs.add(new Name("role-test-client"));
+        clientAttrs.add(AttributeBuilder.build("protocol", "openid-connect"));
+        clientAttrs.add(AttributeBuilder.buildEnabled(true));
+        Uid clientUid = connector.create(KeycloakClientHandler.CLIENT_OBJECT_CLASS, clientAttrs, new OperationOptionsBuilder().build());
+        String clientUUID = clientUid.getUidValue();
+
+        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+                set(new Name(clientUUID + "/cr-a")), new OperationOptionsBuilder().build());
+        connector.create(KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS,
+                set(new Name(clientUUID + "/cr-b")), new OperationOptionsBuilder().build());
+
+        Set<Attribute> attrs = new HashSet<>();
+        attrs.add(new Name("foo"));
+        attrs.add(AttributeBuilder.buildEnabled(true));
+        attrs.add(AttributeBuilder.build("clientRoles", list(clientUUID + "/cr-a")));
+        Uid uid = connector.create(USER_OBJECT_CLASS, attrs, new OperationOptionsBuilder().build());
+
+        // Add cr-b, remove cr-a
+        Set<AttributeDelta> modifications = new HashSet<>();
+        modifications.add(AttributeDeltaBuilder.build("clientRoles",
+                list(clientUUID + "/cr-b"), list(clientUUID + "/cr-a")));
+
+        connector.updateDelta(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), modifications, new OperationOptionsBuilder().build());
+
+        ConnectorObject result = connector.getObject(USER_OBJECT_CLASS,
+                new Uid(uid.getUidValue(), new Name("foo")), defaultGetOperation("clientRoles"));
+
+        List<Object> clientRoles = multiAttr(result, "clientRoles");
+        assertTrue(clientRoles.contains(clientUUID + "/cr-b"));
+        assertFalse(clientRoles.contains(clientUUID + "/cr-a"));
     }
 
     // --- Custom Attributes ---
