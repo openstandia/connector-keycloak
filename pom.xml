@@ -12,7 +12,7 @@
 
     <groupId>jp.openstandia.connector</groupId>
     <artifactId>connector-keycloak</artifactId>
-    <version>1.1.7-keycloak26</version>
+    <version>1.1.7-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Keycloak Connector</name>
@@ -86,26 +86,16 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.2</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.apache.maven.surefire</groupId>
-                        <artifactId>surefire-junit-platform</artifactId>
-                        <version>2.22.2</version>
-                    </dependency>
-                </dependencies>
+                <version>3.5.5</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>2.22.2</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.apache.maven.surefire</groupId>
-                        <artifactId>surefire-junit-platform</artifactId>
-                        <version>2.22.2</version>
-                    </dependency>
-                </dependencies>
+                <version>3.5.5</version>
+                <configuration>
+                    <!-- Run ITs in the same JVM to share the singleton Testcontainers instance -->
+                    <forkCount>0</forkCount>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -163,7 +153,6 @@
                 <artifactId>maven-gpg-plugin</artifactId>
                 <version>1.6</version>
                 <configuration>
-                    <skip>true</skip>
                     <gpgArguments>
                         <arg>--pinentry-mode</arg>
                         <arg>loopback</arg>
@@ -184,10 +173,22 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- Align all Jackson artifact versions across the dependency tree.
+                 This version should match the Jackson version that keycloak-admin-client
+                 brings transitively. When upgrading keycloak-admin-client, check its
+                 dependency tree (mvn dependency:tree | grep jackson) and update this
+                 version accordingly to keep all Jackson artifacts consistent. -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>2.21.2</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.keycloak</groupId>
                 <artifactId>keycloak-admin-client</artifactId>
-                <version>26.0.8</version>
+                <version>26.0.9</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -196,6 +197,49 @@
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-admin-client</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jboss.resteasy</groupId>
+                    <artifactId>resteasy-jackson2-provider</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- Use jackson-jakarta-rs-json-provider directly instead of resteasy-jackson2-provider
+             to avoid ServiceLoader conflict with MidPoint's Jackson modules.
+             ResteasyJackson2Provider calls findAndRegisterModules() in its field initializer,
+             which discovers incompatible ParameterNamesModule from MidPoint's classloader. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.jakarta.rs</groupId>
+            <artifactId>jackson-jakarta-rs-json-provider</artifactId>
+        </dependency>
+
+        <!-- Required at test scope because KeycloakBuilder.build() internally references
+             ResteasyJackson2Provider. In production, we exclude it and register
+             JacksonXmlBindJsonProvider directly to avoid ServiceLoader conflicts. -->
+        <dependency>
+            <groupId>org.jboss.resteasy</groupId>
+            <artifactId>resteasy-jackson2-provider</artifactId>
+            <version>6.2.15.Final</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.14.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>2.0.5</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <version>2.0.5</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -206,7 +250,7 @@
                 <dependency>
                     <groupId>com.evolveum.midpoint.gui</groupId>
                     <artifactId>admin-gui</artifactId>
-                    <version>4.8.2</version>
+                    <version>4.8.11</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
@@ -254,7 +298,7 @@
                     <artifactId>admin-gui</artifactId>
                     <type>jar</type>
                     <classifier>classes</classifier>
-                    <version>4.8.2</version>
+                    <version>4.4.11</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
@@ -271,19 +315,19 @@
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework</artifactId>
-                    <version>1.6.0.0</version>
+                    <version>1.5.1.10</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-internal</artifactId>
-                    <version>1.6.0.0</version>
+                    <version>1.5.1.10</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-contract</artifactId>
-                    <version>1.6.0.0</version>
+                    <version>1.5.1.10</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>
@@ -335,7 +379,7 @@
                     <artifactId>admin-gui</artifactId>
                     <type>jar</type>
                     <classifier>classes</classifier>
-                    <version>4.8.2</version>
+                    <version>4.0.4</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
@@ -352,19 +396,19 @@
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework</artifactId>
-                    <version>1.6.0.0</version>
+                    <version>1.5.0.10</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-internal</artifactId>
-                    <version>1.6.0.0</version>
+                    <version>1.5.0.10</version>
                     <scope>provided</scope>
                 </dependency>
                 <dependency>
                     <groupId>net.tirasa.connid</groupId>
                     <artifactId>connector-framework-contract</artifactId>
-                    <version>1.6.0.0</version>
+                    <version>1.5.0.10</version>
                     <scope>test</scope>
                 </dependency>
                 <dependency>

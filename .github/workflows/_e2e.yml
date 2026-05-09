@@ -1,0 +1,78 @@
+name: E2E test with MidPoint (reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  e2e:
+    name: E2E (MidPoint ${{ matrix.midpoint-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - midpoint-version: '4.0.4'
+            midpoint-image: 'evolveum/midpoint:4.0.4'
+            compose-file: 'docker-compose-h2.yml'
+          - midpoint-version: '4.4.11'
+            midpoint-image: 'evolveum/midpoint:4.4.11'
+            compose-file: 'docker-compose-h2.yml'
+          - midpoint-version: '4.8.11'
+            midpoint-image: 'evolveum/midpoint:4.8.11'
+            compose-file: 'docker-compose-h2.yml'
+          - midpoint-version: '4.10.2'
+            midpoint-image: 'evolveum/midpoint:4.10.2'
+            compose-file: 'docker-compose-postgresql.yml'
+    env:
+      MIDPOINT_IMAGE: ${{ matrix.midpoint-image }}
+      CONNECTOR_JAR: ${{ github.workspace }}/target/connector-keycloak-1.1.7-SNAPSHOT.jar
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'corretto'
+          java-version: 11
+          cache: 'maven'
+
+      - name: Build connector JAR
+        run: mvn -B package -DskipTests -Dgpg.skip=true
+
+      - name: Start containers
+        working-directory: src/test/e2e
+        run: docker compose -f ${{ matrix.compose-file }} up -d
+
+      - name: Wait for test connection result
+        working-directory: src/test/e2e
+        run: |
+          echo "Waiting for MidPoint ${{ matrix.midpoint-version }} to complete test connection..."
+          for i in $(seq 1 60); do
+            if docker compose -f ${{ matrix.compose-file }} logs midpoint 2>&1 | grep -q "INFO.*Keycloak connector test result:"; then
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "::error::Timeout waiting for MidPoint ${{ matrix.midpoint-version }}"
+              docker compose -f ${{ matrix.compose-file }} logs midpoint
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Verify test connection result
+        working-directory: src/test/e2e
+        run: |
+          result=$(docker compose -f ${{ matrix.compose-file }} logs midpoint 2>&1 | grep "INFO.*Keycloak connector test result:" | tail -1)
+          echo "$result"
+          if echo "$result" | grep -q "SUCCESS"; then
+            echo "E2E test PASSED for MidPoint ${{ matrix.midpoint-version }}"
+          else
+            echo "::error::E2E test FAILED for MidPoint ${{ matrix.midpoint-version }}"
+            docker compose -f ${{ matrix.compose-file }} logs midpoint
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        working-directory: src/test/e2e
+        run: docker compose -f ${{ matrix.compose-file }} down -v

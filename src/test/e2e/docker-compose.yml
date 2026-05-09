@@ -1,0 +1,128 @@
+name: connector-keycloak-e2e
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.1
+    command: start-dev
+    environment:
+     - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+     - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    ports:
+     - 8080:8080
+    networks:
+     - net
+
+  # MidPoint 4.0.4 (H2, default password: 5ecr3t)
+  midpoint_40:
+    image: evolveum/midpoint:4.0.4
+    command: [ "/opt/midpoint/bin/midpoint.sh", "container" ]
+    ports:
+      - 8400:8080
+    networks:
+     - net
+    volumes:
+     - midpoint_home_40:/opt/midpoint/var
+     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
+
+  # MidPoint 4.4.11 (H2, default password: 5ecr3t)
+  midpoint_44:
+    image: evolveum/midpoint:4.4.11
+    command: [ "/opt/midpoint/bin/midpoint.sh", "container" ]
+    ports:
+      - 8440:8080
+    networks:
+     - net
+    volumes:
+     - midpoint_home_44:/opt/midpoint/var
+     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
+
+  # MidPoint 4.8.11 (H2)
+  midpoint_48:
+    image: evolveum/midpoint:4.8.11
+    command: [ "/opt/midpoint/bin/midpoint.sh", "container" ]
+    ports:
+      - 8480:8080
+    environment:
+     - MP_SET_midpoint_administrator_initialPassword=Test5ecr3t
+    networks:
+     - net
+    volumes:
+     - midpoint_home_48:/opt/midpoint/var
+     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
+
+  # MidPoint 4.10.2 (PostgreSQL required)
+  midpoint_data_410:
+    image: postgres:16
+    environment:
+     - POSTGRES_PASSWORD=db.secret.pw.007
+     - POSTGRES_USER=midpoint
+     - POSTGRES_INITDB_ARGS=--lc-collate=en_US.utf8 --lc-ctype=en_US.utf8
+    networks:
+     - net
+    volumes:
+     - midpoint_data_410:/var/lib/postgresql/data
+
+  midpoint_410_init:
+    image: evolveum/midpoint:4.10.2
+    command: >
+      bash -c "
+      cd /opt/midpoint ;
+      bin/midpoint.sh init-native ;
+      echo ' - - - - - - ' ;
+      bin/ninja.sh -B info >/dev/null 2>/tmp/ninja.log ;
+      grep -q \"ERROR\" /tmp/ninja.log && (
+      bin/ninja.sh run-sql --create --mode REPOSITORY  ;
+      bin/ninja.sh run-sql --create --mode AUDIT
+      ) ||
+      echo -e '\\n Repository init is not needed...' ;
+      "
+    depends_on:
+     - midpoint_data_410
+    environment:
+     - MP_SET_midpoint_repository_jdbcUsername=midpoint
+     - MP_SET_midpoint_repository_jdbcPassword=db.secret.pw.007
+     - MP_SET_midpoint_repository_jdbcUrl=jdbc:postgresql://midpoint_data_410:5432/midpoint
+     - MP_SET_midpoint_repository_database=postgresql
+     - MP_INIT_CFG=/opt/midpoint/var
+    networks:
+     - net
+    volumes:
+     - midpoint_home_410:/opt/midpoint/var
+
+  midpoint_410:
+    image: evolveum/midpoint:4.10.2
+    depends_on:
+      midpoint_410_init:
+        condition: service_completed_successfully
+      midpoint_data_410:
+        condition: service_started
+    command: [ "/opt/midpoint/bin/midpoint.sh", "container" ]
+    ports:
+      - 8410:8080
+    environment:
+     - MP_SET_midpoint_repository_jdbcUsername=midpoint
+     - MP_SET_midpoint_repository_jdbcPassword=db.secret.pw.007
+     - MP_SET_midpoint_repository_jdbcUrl=jdbc:postgresql://midpoint_data_410:5432/midpoint
+     - MP_SET_midpoint_repository_database=postgresql
+     - MP_SET_midpoint_administrator_initialPassword=Test5ecr3t
+     - MP_UNSET_midpoint_repository_hibernateHbm2ddl=1
+     - MP_NO_ENV_COMPAT=1
+    networks:
+     - net
+    volumes:
+     - midpoint_home_410:/opt/midpoint/var
+     - ../../../target/connector-keycloak-1.1.7-SNAPSHOT.jar:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
+
+networks:
+  net:
+    driver: bridge
+
+volumes:
+  midpoint_home_40:
+  midpoint_home_44:
+  midpoint_home_48:
+  midpoint_data_410:
+  midpoint_home_410:

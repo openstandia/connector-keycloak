@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<role oid="8724e13e-7304-4078-9ba1-74bc2c7a928f"
+      xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+      xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+      xmlns:icfs="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/resource-schema-3"
+      xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3"
+      xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3"
+      xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3"
+      xmlns:t="http://prism.evolveum.com/xml/ns/public/types-3"
+    >
+    <name>keycloak-user-metarole</name>
+    <description>Keycloak user metarole</description>
+    <displayName>Keycloak user metarole</displayName>
+    <inducement>
+        <description>user provisioning</description>
+        <construction>
+            <resourceRef oid="150b94ef-9a4e-4092-8ba6-2a7fbbf4783c" relation="org:default" type="c:ResourceType"/>
+            <kind>account</kind>
+            <intent>default</intent>
+        </construction>
+        <focusType>c:UserType</focusType>
+    </inducement>
+    <requestable>false</requestable>
+</role>

@@ -1,0 +1,35 @@
+name: e2e
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.1
+    command: start-dev
+    environment:
+     - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+     - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    networks:
+     - net
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /realms/master HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | head -1 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  midpoint:
+    image: ${MIDPOINT_IMAGE}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    command: [ "/opt/midpoint/bin/midpoint.sh", "container" ]
+    networks:
+     - net
+    volumes:
+     - midpoint_home:/opt/midpoint/var
+     - ${CONNECTOR_JAR}:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
+
+networks:
+  net:
+    driver: bridge
+
+volumes:
+  midpoint_home:

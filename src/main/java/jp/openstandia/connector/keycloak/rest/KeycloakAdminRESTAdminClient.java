@@ -15,7 +15,11 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
+import com.fasterxml.jackson.jakarta.rs.json.JacksonXmlBindJsonProvider;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import org.identityconnectors.common.StringUtil;
@@ -55,23 +59,47 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         this.instanceName = instanceName;
         this.cofiguration = configuration;
 
-        try {
-            RuntimeDelegate.getInstance();
-        } catch (Throwable t) {
-            // Set the implementation directly as a workaround
-            RuntimeDelegate.setInstance(new ResteasyProviderFactoryImpl());
-        }
+        // Force RESTEasy's RuntimeDelegate implementation.
+        //
+        // ConnId's BundleClassLoader uses child-first class loading for classes, but
+        // ServiceLoader (used by RuntimeDelegate.getInstance()) discovers providers from
+        // all classloader entries including the parent (MidPoint's Spring Boot ClassLoader).
+        // MidPoint 4.8+ bundles Apache CXF, whose RuntimeDelegateImpl is found by ServiceLoader
+        // and is incompatible with RESTEasy, causing:
+        //   ServiceConfigurationError: RuntimeDelegateImpl not a subtype
+        //
+        // Verified behavior across MidPoint versions:
+        // - 4.0/4.4: getInstance() returns RESTEasy (CXF not present in parent classloader)
+        // - 4.8/4.10: getInstance() throws ServiceConfigurationError (CXF found but incompatible)
+        // In all cases, unconditional setInstance() is safe and ensures RESTEasy is used.
+        RuntimeDelegate.setInstance(new ResteasyProviderFactoryImpl());
 
         ResteasyClientBuilder resteasyClientBuilder = new ResteasyClientBuilderImpl();
         resteasyClientBuilder.connectionPoolSize(20);
 
-        // Register a named ContextResolver<ObjectMapper> so that JacksonJsonProvider.locateMapper()
-        // uses our pre-configured mapper instead of calling ObjectMapper.findAndRegisterModules().
-        // A lambda cannot be used here: RESTEasy resolves the generic type T of ContextResolver<T>
-        // via Class.getGenericInterfaces(), which returns null for synthetic lambda classes and
-        // causes: RESTEASY003920 / NullPointerException: "root" is null.
-        // See KeycloakObjectMapperContextResolver for the full rationale.
-        resteasyClientBuilder.register(new KeycloakObjectMapperContextResolver());
+        // Register a Jackson JSON provider with a pre-configured ObjectMapper.
+        //
+        // Normally, keycloak-admin-client uses its own JacksonProvider (which extends
+        // ResteasyJackson2Provider) to configure ObjectMapper with NON_NULL and
+        // FAIL_ON_UNKNOWN_PROPERTIES=false for cross-version compatibility.
+        // See: https://www.keycloak.org/securing-apps/admin-client
+        //
+        // However, ResteasyJackson2Provider has a field initializer that calls
+        // ObjectMapper.findAndRegisterModules(), which uses Java ServiceLoader.
+        // In MidPoint's ConnId BundleClassLoader environment, ServiceLoader discovers
+        // Jackson modules from MidPoint's parent classloader (Spring Boot LaunchedClassLoader)
+        // that are incompatible with the connector's Jackson version, causing:
+        //   ServiceConfigurationError: ParameterNamesModule not a subtype
+        //
+        // To avoid this, we exclude resteasy-jackson2-provider from dependencies and
+        // register JacksonXmlBindJsonProvider directly with a safe ObjectMapper that
+        // does not call findAndRegisterModules(). The ObjectMapper settings match
+        // Keycloak's JacksonProvider: NON_NULL and FAIL_ON_UNKNOWN_PROPERTIES=false.
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        resteasyClientBuilder.register(new JacksonXmlBindJsonProvider(
+                mapper, JacksonXmlBindJsonProvider.DEFAULT_ANNOTATIONS));
 
         // HTTP proxy configuration
         if (configuration.getHttpProxyHost() != null && configuration.getHttpProxyPort() != 0) {
@@ -92,9 +120,6 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         }
 
         // Normalize the server URL once to avoid double-slash or /auth legacy issues.
-        // getNormalizedServerUrl() strips trailing slashes and accepts sub-path URLs
-        // such as https://iam.example.com/iam — the admin client will append
-        // /realms/{realm}/... and /admin/realms/{realm}/... automatically.
         final String normalizedServerUrl = configuration.getNormalizedServerUrl();
         LOGGER.ok("Using Keycloak server URL: {0}", normalizedServerUrl);
 

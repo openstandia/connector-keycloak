@@ -251,18 +251,49 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
         RealmResource realmResource = realm(realmName);
         ClientsResource clientsResource = realmResource.clients();
 
-        // TODO paging
-        List<ClientRepresentation> allClients = clientsResource.findAll();
+        int clientStart = 0;
+        boolean stopped = false;
 
-        allClients.stream().forEach(c -> {
-            RolesResource rolesResource = clientsResource.get(c.getId()).roles();
-            // TODO paging
-            List<RoleRepresentation> clientRoles = rolesResource.list();
+        while (!stopped) {
+            List<ClientRepresentation> clients = clientsResource.findAll(null, true, null, clientStart, queryPageSize);
 
-            clientRoles.stream().forEach(cr -> {
-                handler.handle(toConnectorObject(schema, realmName, cr, attributesToGet, allowPartialAttributeValues, queryPageSize));
-            });
-        });
+            if (clients.isEmpty()) {
+                break;
+            }
+
+            for (ClientRepresentation c : clients) {
+                RolesResource rolesResource = clientsResource.get(c.getId()).roles();
+
+                int roleStart = 0;
+
+                while (!stopped) {
+                    List<RoleRepresentation> clientRoles = rolesResource.list(roleStart, queryPageSize);
+
+                    if (clientRoles.isEmpty()) {
+                        break;
+                    }
+
+                    for (RoleRepresentation cr : clientRoles) {
+                        if (!handler.handle(toConnectorObject(schema, realmName, cr, attributesToGet, allowPartialAttributeValues, queryPageSize))) {
+                            stopped = true;
+                            break;
+                        }
+                    }
+
+                    roleStart += clientRoles.size();
+
+                    if (clientRoles.size() < queryPageSize) {
+                        break;
+                    }
+                }
+            }
+
+            clientStart += clients.size();
+
+            if (clients.size() < queryPageSize) {
+                break;
+            }
+        }
 
         if (handler instanceof SearchResultsHandler) {
             ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));

@@ -345,10 +345,29 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
 
         ClientsResource clients = clients(realmName);
 
-        List<ClientRepresentation> results = clients.findAll();
+        int start = 0;
 
-        for (ClientRepresentation rep : results) {
-            handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
+        while (true) {
+            List<ClientRepresentation> results = clients.findAll(null, true, null, start, queryPageSize);
+
+            if (results.isEmpty()) {
+                break;
+            }
+
+            for (ClientRepresentation rep : results) {
+                if (!handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize))) {
+                    if (handler instanceof SearchResultsHandler) {
+                        ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
+                    }
+                    return;
+                }
+            }
+
+            start += results.size();
+
+            if (results.size() < queryPageSize) {
+                break;
+            }
         }
 
         if (handler instanceof SearchResultsHandler) {
@@ -432,10 +451,11 @@ public class KeycloakAdminRESTClient implements KeycloakClient.Client {
 
         // openid-connect
         if (shouldReturn(attributesToGet, ATTR_SECRET)) {
-            if(rep.getSecret()!=null)
+            if (rep.getSecret() != null) {
                 builder.addAttribute(ATTR_SECRET, new GuardedString(rep.getSecret().toCharArray()));
-            else
+            } else {
                 builder.addAttribute(ATTR_SECRET, rep.getSecret());
+            }
 
         }
         if (shouldReturn(attributesToGet, ATTR_PUBLIC_CLIENT)) {
