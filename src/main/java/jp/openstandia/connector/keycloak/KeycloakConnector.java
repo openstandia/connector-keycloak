@@ -71,14 +71,7 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
     }
 
     protected void initClient() {
-        if (configuration.isGrpcEnabled()) {
-            // Not implemented yet
-            client = null;
-
-        } else {
-            client = new KeycloakAdminRESTAdminClient(instanceName, configuration);
-        }
-
+        client = new KeycloakAdminRESTAdminClient(instanceName, configuration);
     }
 
     @Override
@@ -222,7 +215,6 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
         if (e instanceof WebApplicationException) {
             return processKeycloakAdminRESTException((WebApplicationException) e);
         }
-        // TODO handle gRPC exception
         return new ConnectorException(e);
     }
 

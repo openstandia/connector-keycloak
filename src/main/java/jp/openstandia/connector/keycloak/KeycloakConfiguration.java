@@ -45,9 +45,6 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     private boolean passwordResetAPIEnabled;
     private int httpConnectTimeoutInMilliseconds = 10000;
     private int httpReadTimeoutInMilliseconds = 30000;
-    private boolean grpcEnabled;
-    private String grpcHost;
-    private int grpcPort;
 
     private String httpProxyHost;
     private int httpProxyPort;
@@ -280,49 +277,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 16,
-            displayMessageKey = "Enable gRPC",
-            helpMessageKey = "Enable gRPC for the Keycloak API. CAUTION: You need to install keycloak-grpc on the Keycloak server.",
-            required = false,
-            confidential = false)
-    public boolean isGrpcEnabled() {
-        return grpcEnabled;
-    }
-
-    public void setGrpcEnabled(boolean grpcEnabled) {
-        this.grpcEnabled = grpcEnabled;
-    }
-
-    @ConfigurationProperty(
-            order = 17,
-            displayMessageKey = "gRPC Host",
-            helpMessageKey = "Hostname for gRPC connection.",
-            required = false,
-            confidential = false)
-    public String getGrpcHost() {
-        return grpcHost;
-    }
-
-    public void setGrpcHost(String grpcHost) {
-        this.grpcHost = grpcHost;
-    }
-
-    @ConfigurationProperty(
-            order = 18,
-            displayMessageKey = "gRPC Port",
-            helpMessageKey = "Port for gRPC connection.",
-            required = false,
-            confidential = false)
-    public int getGrpcPort() {
-        return grpcPort;
-    }
-
-    public void setGrpcPort(int grpcHost) {
-        this.grpcPort = grpcPort;
-    }
-
-    @ConfigurationProperty(
-            order = 19,
+            order = 15,
             displayMessageKey = "HTTP Proxy Host",
             helpMessageKey = "Hostname for the HTTP Proxy",
             required = false,
@@ -336,7 +291,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 20,
+            order = 16,
             displayMessageKey = "HTTP Proxy Port",
             helpMessageKey = "Port for the HTTP Proxy",
             required = false,
@@ -350,7 +305,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 21,
+            order = 17,
             displayMessageKey = "HTTP Proxy User",
             helpMessageKey = "Username for the HTTP Proxy Authentication",
             required = false,
@@ -364,7 +319,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 22,
+            order = 18,
             displayMessageKey = "HTTP Proxy Password",
             helpMessageKey = "Password for the HTTP Proxy Authentication",
             required = false,
