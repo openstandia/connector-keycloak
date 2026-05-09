@@ -43,6 +43,7 @@ public class KeycloakSchema {
     public final Map<String, AttributeInfo> groupSchema;
     public final Map<String, AttributeInfo> clientSchema;
     public final Map<String, AttributeInfo> clientRoleSchema;
+    public final Map<String, AttributeInfo> realmRoleSchema;
 
     public KeycloakSchema(KeycloakConfiguration configuration, KeycloakClient client) {
         this.configuration = configuration;
@@ -61,6 +62,9 @@ public class KeycloakSchema {
 
         ObjectClassInfo clientRoleSchemaInfo = KeycloakClientRoleHandler.getSchema(new String[]{});
         schemaBuilder.defineObjectClass(clientRoleSchemaInfo);
+
+        ObjectClassInfo realmRoleSchemaInfo = KeycloakRealmRoleHandler.getSchema(getRealmRoleAttributes());
+        schemaBuilder.defineObjectClass(realmRoleSchemaInfo);
 
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildAttributesToGet(), SearchOp.class);
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildReturnDefaultAttributes(), SearchOp.class);
@@ -87,10 +91,16 @@ public class KeycloakSchema {
             clientRoleSchemaMap.put(info.getName(), info);
         }
 
+        Map<String, AttributeInfo> realmRoleSchemaMap = new HashMap<>();
+        for (AttributeInfo info : realmRoleSchemaInfo.getAttributeInfo()) {
+            realmRoleSchemaMap.put(info.getName(), info);
+        }
+
         this.userSchema = Collections.unmodifiableMap(userSchemaMap);
         this.groupSchema = Collections.unmodifiableMap(groupSchemaMap);
         this.clientSchema = Collections.unmodifiableMap(clientSchemaMap);
         this.clientRoleSchema = Collections.unmodifiableMap(clientRoleSchemaMap);
+        this.realmRoleSchema = Collections.unmodifiableMap(realmRoleSchemaMap);
 
         this.version = client.getVersion();
 
@@ -99,15 +109,13 @@ public class KeycloakSchema {
 
     private void parseVersion() {
         try {
-            String[] s = version.split("\\.");
+            // Strip any build metadata or pre-release suffix (e.g. "-SNAPSHOT", ".Final", "-alpha1")
+            // so that version strings such as "26.0.0", "26.0.0-SNAPSHOT", "26.0.0.Final" all parse correctly.
+            String v = version.replaceAll("[^0-9.].*$", "");
+            String[] s = v.split("\\.");
             this.majorVersion = Integer.parseInt(s[0]);
-            this.minorVersion = Integer.parseInt(s[1]);
-            if (s[2].contains("-")) {
-                String ps = s[2].substring(0, s[2].indexOf("-"));
-                this.patchVersion = Integer.parseInt(ps);
-            } else {
-                this.patchVersion = Integer.parseInt(s[2]);
-            }
+            this.minorVersion = s.length > 1 ? Integer.parseInt(s[1]) : 0;
+            this.patchVersion = s.length > 2 ? Integer.parseInt(s[2]) : 0;
         } catch (NumberFormatException | IndexOutOfBoundsException e) {
             throw new ConnectorException(String.format("Keycloak returns unexpected version number: %s", version));
         }
@@ -133,6 +141,14 @@ public class KeycloakSchema {
         String clientAttributes = configuration.getClientAttributes();
         if (clientAttributes != null) {
             return clientAttributes.split(",");
+        }
+        return new String[]{};
+    }
+
+    private String[] getRealmRoleAttributes() {
+        String realmRoleAttributes = configuration.getRealmRoleAttributes();
+        if (realmRoleAttributes != null) {
+            return realmRoleAttributes.split(",");
         }
         return new String[]{};
     }
@@ -195,5 +211,25 @@ public class KeycloakSchema {
 
     public AttributeInfo getClientSchema(String attributeName) {
         return clientSchema.get(attributeName);
+    }
+
+    public boolean isRealmRoleSchema(Attribute attribute) {
+        return realmRoleSchema.containsKey(attribute.getName());
+    }
+
+    public boolean isMultiValuedRealmRoleSchema(Attribute attribute) {
+        return realmRoleSchema.get(attribute.getName()).isMultiValued();
+    }
+
+    public boolean isRealmRoleSchema(AttributeDelta delta) {
+        return realmRoleSchema.containsKey(delta.getName());
+    }
+
+    public boolean isMultiValuedRealmRoleSchema(AttributeDelta delta) {
+        return realmRoleSchema.get(delta.getName()).isMultiValued();
+    }
+
+    public AttributeInfo getRealmRoleSchema(String attributeName) {
+        return realmRoleSchema.get(attributeName);
     }
 }

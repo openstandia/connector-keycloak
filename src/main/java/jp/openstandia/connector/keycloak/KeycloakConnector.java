@@ -33,6 +33,7 @@ import java.util.Set;
 import static jp.openstandia.connector.keycloak.KeycloakClientHandler.CLIENT_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakGroupHandler.GROUP_OBJECT_CLASS;
+import static jp.openstandia.connector.keycloak.KeycloakRealmRoleHandler.REALM_ROLE_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakUserHandler.USER_OBJECT_CLASS;
 
 /**
@@ -71,14 +72,7 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
     }
 
     protected void initClient() {
-        if (configuration.isGrpcEnabled()) {
-            // Not implemented yet
-            client = null;
-
-        } else {
-            client = new KeycloakAdminRESTAdminClient(instanceName, configuration);
-        }
-
+        client = new KeycloakAdminRESTAdminClient(instanceName, configuration);
     }
 
     @Override
@@ -116,6 +110,9 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
 
         } else if (objectClass.equals(CLIENT_ROLE_OBJECT_CLASS)) {
             return new KeycloakClientRoleHandler(instanceName, configuration, client, schema);
+
+        } else if (objectClass.equals(REALM_ROLE_OBJECT_CLASS)) {
+            return new KeycloakRealmRoleHandler(instanceName, configuration, client, schema);
 
         } else {
             throw new InvalidAttributeValueException("Unsupported object class " + objectClass);
@@ -222,7 +219,6 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
         if (e instanceof WebApplicationException) {
             return processKeycloakAdminRESTException((WebApplicationException) e);
         }
-        // TODO handle gRPC exception
         return new ConnectorException(e);
     }
 

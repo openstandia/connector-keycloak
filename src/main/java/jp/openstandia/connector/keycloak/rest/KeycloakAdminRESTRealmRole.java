@@ -25,34 +25,30 @@ import org.identityconnectors.framework.common.exceptions.UnknownUidException;
 import org.identityconnectors.framework.common.objects.*;
 import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.resource.ClientResource;
-import org.keycloak.admin.client.resource.ClientsResource;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.RolesResource;
-import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RoleRepresentation;
 
 import jakarta.ws.rs.NotFoundException;
 import java.util.*;
 
-import static jp.openstandia.connector.keycloak.KeycloakClientHandler.ATTR_CLIENT_UUID;
-import static jp.openstandia.connector.keycloak.KeycloakClientRoleHandler.*;
+import static jp.openstandia.connector.keycloak.KeycloakRealmRoleHandler.*;
 import static jp.openstandia.connector.keycloak.KeycloakUtils.*;
 
 /**
- * Keycloak clientRole implementation for clientRole object which uses Keycloak Admin REST client.
+ * Keycloak realmRole implementation for realmRole object which uses Keycloak Admin REST client.
  *
  * @author Hiroyuki Wada
  */
-public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
+public class KeycloakAdminRESTRealmRole implements KeycloakClient.RealmRole {
 
-    private static final Log LOGGER = Log.getLog(KeycloakAdminRESTClientRole.class);
+    private static final Log LOGGER = Log.getLog(KeycloakAdminRESTRealmRole.class);
 
     private final String instanceName;
     private final KeycloakConfiguration configuration;
     private Keycloak adminClient;
 
-    public KeycloakAdminRESTClientRole(String instanceName, KeycloakConfiguration configuration, Keycloak adminClient) {
+    public KeycloakAdminRESTRealmRole(String instanceName, KeycloakConfiguration configuration, Keycloak adminClient) {
         this.instanceName = instanceName;
         this.configuration = configuration;
         this.adminClient = adminClient;
@@ -62,79 +58,51 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
         return adminClient.realm(realmName);
     }
 
-    /**
-     * Extract the roleId from the UID which is in "clientUUID/roleId" format.
-     */
-    private String extractRoleId(Uid uid) {
-        String value = uid.getUidValue();
-        int idx = value.indexOf("/");
-        return idx > 0 ? value.substring(idx + 1) : value;
+    private RoleRepresentation realmRole(String realmName, Uid uid) {
+        return realm(realmName).rolesById().getRole(uid.getUidValue());
     }
 
-    private RoleRepresentation clientRole(String realmName, Uid uid) {
-        return realm(realmName).rolesById().getRole(extractRoleId(uid));
-    }
-
-    private RoleRepresentation clientRole(String realmName, Name name) {
-        String[] split = name.getNameValue().split("/");
-        if (split.length != 2) {
-            throw new InvalidAttributeValueException("Invalid name format for the clientRole. It must be <clientUUID>/<clientRoleName>. name: "
-                    + name.getNameValue());
-        }
-
-        // Find by clientUUID and clientRoleName
-        return realm(realmName).clients().get(split[0]).roles().get(split[1]).toRepresentation();
+    private RoleRepresentation realmRole(String realmName, Name name) {
+        return realm(realmName).roles().get(name.getNameValue()).toRepresentation();
     }
 
     @Override
-    public Uid createClientRole(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException {
-        RoleRepresentation rep = toClientRoleRep(schema, createAttributes);
+    public Uid createRealmRole(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes) throws AlreadyExistsException {
+        RoleRepresentation rep = toRealmRoleRep(schema, createAttributes);
 
-        if (rep.getContainerId() == null || rep.getName() == null) {
-            throw new InvalidAttributeValueException("Must define name for the clientRole object");
+        if (rep.getName() == null) {
+            throw new InvalidAttributeValueException("Must define name for the realmRole object");
         }
 
-        ClientResource clientResource = realm(realmName).clients().get(rep.getContainerId());
+        RolesResource rolesResource = realm(realmName).roles();
 
-        clientResource.roles().create(rep);
+        rolesResource.create(rep);
 
-        RoleRepresentation created = clientResource.roles().get(rep.getName()).toRepresentation();
+        RoleRepresentation created = rolesResource.get(rep.getName()).toRepresentation();
 
-        // If the API doesn't support putting attributes when creating, we need to update the clientRole here
+        // If the API doesn't support putting attributes when creating, we need to update the realmRole here
         if (rep.getAttributes() != null && !rep.getAttributes().isEmpty() && created.getAttributes().isEmpty()) {
             created.setAttributes(rep.getAttributes());
             realm(realmName).rolesById().updateRole(created.getId(), created);
         }
 
-        return new Uid(getUniqueId(created), new Name(getUniqueName(created)));
+        return new Uid(created.getId(), new Name(created.getName()));
     }
 
-    protected RoleRepresentation toClientRoleRep(KeycloakSchema schema, Set<Attribute> attributes) {
-        RoleRepresentation newClientRole = new RoleRepresentation();
-        newClientRole.setClientRole(true);
+    protected RoleRepresentation toRealmRoleRep(KeycloakSchema schema, Set<Attribute> attributes) {
+        RoleRepresentation newRealmRole = new RoleRepresentation();
+        newRealmRole.setClientRole(false);
 
         for (Attribute attr : attributes) {
             if (attr.getName().equals(Name.NAME)) {
-                String name = AttributeUtil.getAsStringValue(attr);
-                String[] split = name.split("/");
-
-                if (split.length != 2) {
-                    throw new InvalidAttributeValueException("Invalid clientRole name format." +
-                            " It must be <clientUUID>/<clientRoleName>. name: " + name);
-                }
-
-                newClientRole.setContainerId(split[0]);
-                newClientRole.setName(split[1]);
+                newRealmRole.setName(AttributeUtil.getAsStringValue(attr));
 
             } else if (attr.getName().equals(ATTR_DESCRIPTION)) {
-                newClientRole.setDescription(AttributeUtil.getStringValue(attr));
-
-            } else if (attr.getName().equals(ATTR_CLIENT_UUID)) {
-                newClientRole.setContainerId(AttributeUtil.getStringValue(attr));
+                newRealmRole.setDescription(AttributeUtil.getStringValue(attr));
 
             } else if (attr.getName().equals(ATTR_ATTRIBUTES)) {
                 // Configured Attributes
-                Map<String, List<String>> attrs = newClientRole.getAttributes();
+                Map<String, List<String>> attrs = newRealmRole.getAttributes();
                 if (attrs == null) {
                     attrs = new HashMap();
                 }
@@ -152,30 +120,21 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
                     attrs.put(key, Arrays.asList(value.split("##")));
                 }
 
-                newClientRole.setAttributes(attrs);
+                newRealmRole.setAttributes(attrs);
             }
         }
 
-        return newClientRole;
+        return newRealmRole;
     }
 
     @Override
-    public void updateClientRole(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException {
-        RoleRepresentation current = clientRole(realmName, uid);
+    public void updateRealmRole(KeycloakSchema schema, String realmName, Uid uid, Set<AttributeDelta> modifications, OperationOptions options) throws UnknownUidException {
+        RoleRepresentation current = realmRole(realmName, uid);
 
         try {
             for (AttributeDelta delta : modifications) {
                 if (delta.getName().equals(Name.NAME)) {
-                    String name = AttributeDeltaUtil.getAsStringValue(delta);
-                    String[] split = name.split("/");
-
-                    if (split.length != 2) {
-                        throw new InvalidAttributeValueException("Invalid clientRole name format." +
-                                " It must be <clientUUID>/<clientRoleName>. name: " + name);
-                    }
-
-                    current.setContainerId(split[0]);
-                    current.setName(split[1]);
+                    current.setName(AttributeDeltaUtil.getAsStringValue(delta));
 
                 } else if (delta.getName().equals(ATTR_DESCRIPTION)) {
                     current.setDescription(AttributeDeltaUtil.getStringValue(delta));
@@ -197,7 +156,7 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
                             }
                             String key = kv.substring(0, index);
 
-                            if (schema.clientSchema.containsKey(key)) {
+                            if (schema.realmRoleSchema != null && schema.realmRoleSchema.containsKey(key)) {
                                 LOGGER.ok("Ignore removing attributes because it's configured attribute");
                                 continue;
                             }
@@ -215,7 +174,7 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
                             String key = kv.substring(0, index);
                             String value = kv.substring(index + 1);
 
-                            if (schema.clientSchema.containsKey(key)) {
+                            if (schema.realmRoleSchema != null && schema.realmRoleSchema.containsKey(key)) {
                                 LOGGER.ok("Ignore putting attributes because it's configured attribute");
                                 continue;
                             }
@@ -235,71 +194,51 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
             realm(realmName).rolesById().updateRole(current.getId(), current);
 
         } catch (NotFoundException e) {
-            LOGGER.warn("Not found clientRole when updating. uid: {0}", uid);
-            throw new UnknownUidException(uid, CLIENT_ROLE_OBJECT_CLASS);
+            LOGGER.warn("Not found realmRole when updating. uid: {0}", uid);
+            throw new UnknownUidException(uid, REALM_ROLE_OBJECT_CLASS);
         }
 
     }
 
     @Override
-    public void deleteClientRole(KeycloakSchema schema, String realmName, Uid uid, OperationOptions options) throws UnknownUidException {
+    public void deleteRealmRole(KeycloakSchema schema, String realmName, Uid uid, OperationOptions options) throws UnknownUidException {
         try {
-            realm(realmName).rolesById().deleteRole(extractRoleId(uid));
+            realm(realmName).rolesById().deleteRole(uid.getUidValue());
 
         } catch (NotFoundException e) {
-            LOGGER.warn("[{0}] Not found clientRole when deleting. uid: {1}", instanceName, uid);
-            throw new UnknownUidException(uid, CLIENT_ROLE_OBJECT_CLASS);
+            LOGGER.warn("[{0}] Not found realmRole when deleting. uid: {1}", instanceName, uid);
+            throw new UnknownUidException(uid, REALM_ROLE_OBJECT_CLASS);
         }
     }
 
     @Override
-    public void getClientRoles(KeycloakSchema schema, String realmName, ResultsHandler handler, OperationOptions options,
+    public void getRealmRoles(KeycloakSchema schema, String realmName, ResultsHandler handler, OperationOptions options,
                                Set<String> attributesToGet, int queryPageSize) {
         boolean allowPartialAttributeValues = shouldAllowPartialAttributeValues(options);
 
-        RealmResource realmResource = realm(realmName);
-        ClientsResource clientsResource = realmResource.clients();
+        RolesResource rolesResource = realm(realmName).roles();
 
-        int clientStart = 0;
-        boolean stopped = false;
+        int start = 0;
 
-        while (!stopped) {
-            List<ClientRepresentation> clients = clientsResource.findAll(null, true, null, clientStart, queryPageSize);
+        while (true) {
+            List<RoleRepresentation> realmRoles = rolesResource.list(start, queryPageSize);
 
-            if (clients.isEmpty()) {
+            if (realmRoles.isEmpty()) {
                 break;
             }
 
-            for (ClientRepresentation c : clients) {
-                RolesResource rolesResource = clientsResource.get(c.getId()).roles();
-
-                int roleStart = 0;
-
-                while (!stopped) {
-                    List<RoleRepresentation> clientRoles = rolesResource.list(roleStart, queryPageSize);
-
-                    if (clientRoles.isEmpty()) {
-                        break;
+            for (RoleRepresentation cr : realmRoles) {
+                if (!handler.handle(toConnectorObject(schema, realmName, cr, attributesToGet, allowPartialAttributeValues, queryPageSize))) {
+                    if (handler instanceof SearchResultsHandler) {
+                        ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
                     }
-
-                    for (RoleRepresentation cr : clientRoles) {
-                        if (!handler.handle(toConnectorObject(schema, realmName, cr, attributesToGet, allowPartialAttributeValues, queryPageSize))) {
-                            stopped = true;
-                            break;
-                        }
-                    }
-
-                    roleStart += clientRoles.size();
-
-                    if (clientRoles.size() < queryPageSize) {
-                        break;
-                    }
+                    return;
                 }
             }
 
-            clientStart += clients.size();
+            start += realmRoles.size();
 
-            if (clients.size() < queryPageSize) {
+            if (realmRoles.size() < queryPageSize) {
                 break;
             }
         }
@@ -310,13 +249,13 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
     }
 
     @Override
-    public void getClientRole(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options,
+    public void getRealmRole(KeycloakSchema schema, String realmName, Uid uid, ResultsHandler handler, OperationOptions options,
                               Set<String> attributesToGet, int queryPageSize) {
         try {
-            RoleRepresentation rep = clientRole(realmName, uid);
+            RoleRepresentation rep = realmRole(realmName, uid);
 
             if (rep == null) {
-                LOGGER.warn("[{0}] Unknown clientRole uuid: {1}, name: {2}", instanceName, uid.getUidValue(), uid.getNameHintValue());
+                LOGGER.warn("[{0}] Unknown realmRole uuid: {1}, name: {2}", instanceName, uid.getUidValue(), uid.getNameHintValue());
                 return;
             }
 
@@ -325,22 +264,19 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
             handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
 
         } catch (NotFoundException e) {
-            // Don't throw UnknownUidException
-            // The executeQuery should not indicate any error in this case. It should not throw any exception.
-            // MidPoint will see empty result set and it will figure out that there is no such object.
-            LOGGER.warn("[{0}] Unknown clientRole uuid: {1}, name: {2}", instanceName, uid.getUidValue(), uid.getNameHintValue());
+            LOGGER.warn("[{0}] Unknown realmRole uuid: {1}, name: {2}", instanceName, uid.getUidValue(), uid.getNameHintValue());
             return;
         }
     }
 
     @Override
-    public void getClientRole(KeycloakSchema schema, String realmName, Name name, ResultsHandler handler, OperationOptions options,
+    public void getRealmRole(KeycloakSchema schema, String realmName, Name name, ResultsHandler handler, OperationOptions options,
                               Set<String> attributesToGet, int queryPageSize) {
         try {
-            RoleRepresentation rep = clientRole(realmName, name);
+            RoleRepresentation rep = realmRole(realmName, name);
 
             if (rep == null) {
-                LOGGER.warn("[{0}] Unknown clientRole name: {1}", instanceName, name.getNameValue());
+                LOGGER.warn("[{0}] Unknown realmRole name: {1}", instanceName, name.getNameValue());
                 return;
             }
 
@@ -349,34 +285,19 @@ public class KeycloakAdminRESTClientRole implements KeycloakClient.ClientRole {
             handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
 
         } catch (NotFoundException e) {
-            // Don't throw UnknownUidException
-            // The executeQuery should not indicate any error in this case. It should not throw any exception.
-            // MidPoint will see empty result set and it will figure out that there is no such object.
-            LOGGER.warn("[{0}] Unknown clientRole name: {1}", instanceName, name.getNameValue());
+            LOGGER.warn("[{0}] Unknown realmRole name: {1}", instanceName, name.getNameValue());
             return;
         }
-    }
-
-    /**
-     * Returns unique name with "clientUUID/clientRoleName" format.
-     *
-     * @param rep
-     * @return
-     */
-    private String getUniqueId(RoleRepresentation rep) {
-        return rep.getContainerId() + "/" + rep.getId();
-    }
-
-    private String getUniqueName(RoleRepresentation rep) {
-        return rep.getContainerId() + "/" + rep.getName();
     }
 
     private ConnectorObject toConnectorObject(KeycloakSchema schema, String realmName, RoleRepresentation rep,
                                               Set<String> attributesToGet, boolean allowPartialAttributeValues, int queryPageSize) {
         final ConnectorObjectBuilder builder = new ConnectorObjectBuilder()
-                .setObjectClass(CLIENT_ROLE_OBJECT_CLASS)
-                .setUid(getUniqueId(rep))
-                .setName(getUniqueName(rep));
+                .setObjectClass(REALM_ROLE_OBJECT_CLASS)
+                // Always returns "id"
+                .setUid(rep.getId())
+                // Always returns "name"
+                .setName(rep.getName());
 
         if (shouldReturn(attributesToGet, ATTR_DESCRIPTION)) {
             builder.addAttribute(ATTR_DESCRIPTION, rep.getDescription());

@@ -50,12 +50,21 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
     public static final String ATTR_FIRST_NAME = "firstName";
     public static final String ATTR_LAST_NAME = "lastName";
 
+    // Required Actions (e.g. UPDATE_PASSWORD, VERIFY_EMAIL, CONFIGURE_TOTP)
+    public static final String ATTR_REQUIRED_ACTIONS = "requiredActions";
+
     // Metadata
     public static final String ATTR_CREATED_TIMESTAMP = "createdTimestamp";
 
     // Association
     // groups is a list of keycloak group's id
     public static final String ATTR_GROUPS = "groups";
+
+    // realmRoles is a list of keycloak realm role names
+    public static final String ATTR_REALM_ROLES = "realmRoles";
+
+    // clientRoles is a list of keycloak client role names in format "<clientUUID>/<roleName>"
+    public static final String ATTR_CLIENT_ROLES = "clientRoles";
 
     // Password
     public static final String ATTR_PASSWORD = "__PASSWORD__";
@@ -72,6 +81,9 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
         attrs.add(Name.NAME);
         attrs.add(ATTR_CREATED_TIMESTAMP);
         attrs.add(ATTR_GROUPS);
+        attrs.add(ATTR_REALM_ROLES);
+        attrs.add(ATTR_CLIENT_ROLES);
+        attrs.add(ATTR_REQUIRED_ACTIONS);
         attrs.add(ATTR_PASSWORD_PERMANENT);
         attrs.addAll(OperationalAttributes.OPERATIONAL_ATTRIBUTE_NAMES);
 
@@ -174,6 +186,14 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
             );
         }
 
+        // Required Actions
+        // NOTE: Keycloak automatically removes requiredActions when the user completes them.
+        // Use conditional outbound mapping in MidPoint to avoid re-setting on recompute/reconciliation.
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_REQUIRED_ACTIONS)
+                .setMultiValued(true)
+                .setRequired(false)
+                .build());
+
         // Metadata
         builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_CREATED_TIMESTAMP)
                 .setType(ZonedDateTime.class)
@@ -183,6 +203,14 @@ public class KeycloakUserHandler extends AbstractKeycloakHandler {
 
         // Association
         builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_GROUPS)
+                .setMultiValued(true)
+                .setReturnedByDefault(false)
+                .build());
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_REALM_ROLES)
+                .setMultiValued(true)
+                .setReturnedByDefault(false)
+                .build());
+        builder.addAttributeInfo(AttributeInfoBuilder.define(ATTR_CLIENT_ROLES)
                 .setMultiValued(true)
                 .setReturnedByDefault(false)
                 .build());

@@ -2,3 +2,4 @@ target
 *.jar
 .idea
 
+src/test/e2e/.env

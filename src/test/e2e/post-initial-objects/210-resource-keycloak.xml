@@ -1,0 +1,253 @@
+<resource oid="150b94ef-9a4e-4092-8ba6-2a7fbbf4783c"
+          xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+          xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+          xmlns:icfs="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/resource-schema-3"
+          xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3"
+          xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3"
+          xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3"
+          xmlns:t="http://prism.evolveum.com/xml/ns/public/types-3"
+          >
+    <name>keycloak</name>
+    <connectorRef relation="org:default" type="c:ConnectorType">
+        <filter>
+            <q:and>
+                <q:equal>
+                    <q:path>c:connectorType</q:path>
+                    <q:value>jp.openstandia.connector.keycloak.KeycloakConnector</q:value>
+                </q:equal>
+            </q:and>
+        </filter>
+    </connectorRef>
+    <connectorConfiguration xmlns:icfc="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/connector-schema-3">
+        <icfc:resultsHandlerConfiguration>
+            <icfc:enableNormalizingResultsHandler>false</icfc:enableNormalizingResultsHandler>
+            <icfc:enableFilteredResultsHandler>false</icfc:enableFilteredResultsHandler>
+            <icfc:enableAttributesToGetSearchResultsHandler>false</icfc:enableAttributesToGetSearchResultsHandler>
+        </icfc:resultsHandlerConfiguration>
+        <icfc:configurationProperties xmlns:gen232="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/bundle/jp.openstandia.connector.connector-keycloak/jp.openstandia.connector.keycloak.KeycloakConnector">
+            <gen232:serverUrl>http://keycloak:8080</gen232:serverUrl>
+            <gen232:username>admin</gen232:username>
+            <gen232:password>admin</gen232:password>
+            <gen232:clientId>admin-cli</gen232:clientId>
+            <gen232:userAttributes>fullName,organizationalUnits:multivalued</gen232:userAttributes>
+            <gen232:groupAttributes>description</gen232:groupAttributes>
+            <gen232:realmName>master</gen232:realmName>
+            <gen232:targetRealmName>master</gen232:targetRealmName>
+            <gen232:passwordResetAPIEnabled>true</gen232:passwordResetAPIEnabled>
+        </icfc:configurationProperties>
+    </connectorConfiguration>
+    <schema>
+        <generationConstraints>
+            <generateObjectClass>ri:user</generateObjectClass>
+            <generateObjectClass>ri:group</generateObjectClass>
+        </generationConstraints>
+    </schema>
+    <schemaHandling>
+        <objectType>
+            <kind>account</kind>
+            <intent>default</intent>
+            <displayName>User</displayName>
+            <default>true</default>
+            <objectClass>ri:user</objectClass>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:username</c:ref>
+                <displayName>Username</displayName>
+                <limitations>
+                    <access>
+                        <read>true</read>
+                        <add>true</add>
+                    </access>
+                </limitations>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <c:path>$focus/name</c:path>
+                    </source>
+                </outbound>
+            </attribute>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:email</c:ref>
+                <displayName>Email</displayName>
+                <matchingRule xmlns:mr="http://prism.evolveum.com/xml/ns/public/matching-rule-3">mr:stringIgnoreCase</matchingRule>
+                <tolerant>false</tolerant>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <c:path>$focus/emailAddress</c:path>
+                    </source>
+                </outbound>
+            </attribute>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:lastName</c:ref>
+                <tolerant>false</tolerant>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <c:path>$focus/familyName</c:path>
+                    </source>
+                </outbound>
+            </attribute>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:firstName</c:ref>
+                <tolerant>false</tolerant>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <c:path>$focus/givenName</c:path>
+                    </source>
+                </outbound>
+            </attribute>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:fullName</c:ref>
+                <tolerant>false</tolerant>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <c:path>$focus/fullName</c:path>
+                    </source>
+                </outbound>
+            </attribute>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:groups</c:ref>
+                <fetchStrategy>explicit</fetchStrategy>
+            </attribute>
+            <association>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:group</c:ref>
+                <displayName>Keycloak Group</displayName>
+                <tolerant>false</tolerant>
+                <kind>entitlement</kind>
+                <intent>default</intent>
+                <direction>subjectToObject</direction>
+                <associationAttribute>ri:groups</associationAttribute>
+                <valueAttribute>ri:groupId</valueAttribute>
+            </association>
+            <activation>
+                <administrativeStatus>
+                    <outbound>
+                        <expression>
+                            <asIs xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3" xsi:type="c:AsIsExpressionEvaluatorType"/>
+                        </expression>
+                    </outbound>
+                </administrativeStatus>
+            </activation>
+            <credentials>
+                <password>
+                    <outbound>
+                        <strength>strong</strength>
+                        <expression>
+                            <asIs xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="c:AsIsExpressionEvaluatorType"/>
+                        </expression>
+                    </outbound>
+                </password>
+            </credentials>
+        </objectType>
+        <objectType>
+            <kind>entitlement</kind>
+            <intent>default</intent>
+            <displayName>Group</displayName>
+            <default>true</default>
+            <objectClass>ri:group</objectClass>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:name</c:ref>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <c:path>$focus/name</c:path>
+                    </source>
+                </outbound>
+            </attribute>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:description</c:ref>
+                <tolerant>false</tolerant>
+                <outbound>
+                    <strength>strong</strength>
+                    <source>
+                        <c:path>$focus/description</c:path>
+                    </source>
+                </outbound>
+            </attribute>
+            <attribute>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:parentGroup</c:ref>
+                <fetchStrategy>explicit</fetchStrategy>
+            </attribute>
+            <association>
+                <c:ref xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">ri:group</c:ref>
+                <displayName>Keycloak Group Tree</displayName>
+                <tolerant>false</tolerant>
+                <kind>entitlement</kind>
+                <intent>default</intent>
+                <direction>subjectToObject</direction>
+                <associationAttribute>ri:parentGroup</associationAttribute>
+                <valueAttribute>ri:groupId</valueAttribute>
+            </association>
+        </objectType>
+    </schemaHandling>
+    <synchronization>
+        <objectSynchronization>
+            <name>account sync</name>
+            <objectClass>ri:user</objectClass>
+            <kind>account</kind>
+            <intent>default</intent>
+            <focusType>c:UserType</focusType>
+            <enabled>true</enabled>
+            <correlation>
+                <q:equal>
+                    <q:path xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3">c:name</q:path>
+                    <expression>
+                        <path xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">$shadow/attributes/ri:username</path>
+                    </expression>
+                </q:equal>
+            </correlation>
+            <reconcile>false</reconcile>
+            <reaction>
+                <situation>linked</situation>
+                <synchronize>true</synchronize>
+            </reaction>
+            <reaction>
+                <situation>deleted</situation>
+                <action>
+                    <handlerUri>http://midpoint.evolveum.com/xml/ns/public/model/action-3#unlink</handlerUri>
+                </action>
+            </reaction>
+            <reaction>
+                <situation>unlinked</situation>
+                <action>
+                    <handlerUri>http://midpoint.evolveum.com/xml/ns/public/model/action-3#link</handlerUri>
+                </action>
+            </reaction>
+        </objectSynchronization>
+        <objectSynchronization>
+            <name>group sync</name>
+            <objectClass>ri:group</objectClass>
+            <kind>entitlement</kind>
+            <intent>default</intent>
+            <focusType>c:OrgType</focusType>
+            <enabled>true</enabled>
+            <correlation>
+                <q:equal>
+                    <q:path xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3">c:name</q:path>
+                    <expression>
+                        <path xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">$shadow/attributes/ri:name</path>
+                    </expression>
+                </q:equal>
+            </correlation>
+            <reconcile>false</reconcile>
+            <reaction>
+                <situation>linked</situation>
+                <synchronize>true</synchronize>
+            </reaction>
+            <reaction>
+                <situation>deleted</situation>
+                <action>
+                    <handlerUri>http://midpoint.evolveum.com/xml/ns/public/model/action-3#unlink</handlerUri>
+                </action>
+            </reaction>
+            <reaction>
+                <situation>unlinked</situation>
+                <action>
+                    <handlerUri>http://midpoint.evolveum.com/xml/ns/public/model/action-3#link</handlerUri>
+                </action>
+            </reaction>
+        </objectSynchronization>
+    </synchronization>
+</resource>

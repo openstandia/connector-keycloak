@@ -15,6 +15,9 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import jp.openstandia.connector.keycloak.KeycloakSchema;
@@ -25,12 +28,14 @@ import org.identityconnectors.framework.common.exceptions.AlreadyExistsException
 import org.identityconnectors.framework.common.exceptions.InvalidAttributeValueException;
 import org.identityconnectors.framework.common.exceptions.UnknownUidException;
 import org.identityconnectors.framework.common.objects.*;
+import org.identityconnectors.framework.spi.SearchResultsHandler;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.admin.client.resource.UsersResource;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.GroupRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 
 import jakarta.ws.rs.BadRequestException;
@@ -75,7 +80,11 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
     @Override
     public Uid createUser(KeycloakSchema schema, String realmName, Set<Attribute> createAttributes)
             throws AlreadyExistsException {
+        LOGGER.ok("createUser attributes count: {0}", createAttributes.size());
+
         UserRepresentation newUser = toUserRep(schema, createAttributes);
+        LOGGER.ok("Creating user: {0}", newUser.getUsername());
+
 
         CredentialRepresentation credential = null;
         if (configuration.isPasswordResetAPIEnabled()) {
@@ -91,7 +100,35 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         // Remove groups intentionally because keycloak expects group path list
         newUser.setGroups(null);
 
+        List<String> addRealmRoles = new ArrayList<>();
+        List<String> addClientRoles = new ArrayList<>();
+        for (Attribute attr : createAttributes) {
+            if (attr.getName().equals(ATTR_REALM_ROLES)) {
+                addRealmRoles = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
+            } else if (attr.getName().equals(ATTR_CLIENT_ROLES)) {
+                addClientRoles = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
+            }
+        }
+
         Response res = users(realmName).create(newUser);
+
+        // Buffer the entity so it can be read multiple times (e.g. by checkCreateResult on error paths).
+        res.bufferEntity();
+        if (LOGGER.isOk()) {
+            try {
+                String resBody = res.readEntity(String.class);
+                LOGGER.ok("ResBody: {0}", resBody);
+                if (resBody != null && !resBody.isBlank()) {
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode node = mapper.readTree(resBody);
+                    if (node != null) {
+                        LOGGER.ok("Response message: {0}", node.path("message").asText(""));
+                    }
+                }
+            } catch (JsonProcessingException e) {
+                LOGGER.warn("Could not parse response body as JSON: {0}", e.getMessage());
+            }
+        }
 
         String uuid = checkCreateResult(res, "createUser");
 
@@ -116,6 +153,9 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                 }
             }
         }
+
+        addRealmRolesToUser(realmName, uuid, newUser.getUsername(), addRealmRoles);
+        addClientRolesToUser(realmName, uuid, newUser.getUsername(), addClientRoles);
 
         return new Uid(uuid, new Name(newUser.getUsername()));
     }
@@ -158,10 +198,19 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
 
             } else if (attr.getName().equals(ATTR_GROUPS)) {
                 // Keycloak expects the group list as group path list.
-                // Because we set group id list here, we cant't use it for this API.
+                // Because we set group id list here, we can't use it for this API directly.
                 // See createUser method.
                 List<String> groups = attr.getValue().stream().map(a -> a.toString()).collect(Collectors.toList());
+                LOGGER.ok("Set groups: {0}", groups);
                 newUser.setGroups(groups);
+
+            } else if (attr.getName().equals(ATTR_REQUIRED_ACTIONS)) {
+                List<String> actions = attr.getValue().stream()
+                        .map(Object::toString).collect(Collectors.toList());
+                newUser.setRequiredActions(actions);
+
+            } else if (attr.getName().equals(ATTR_REALM_ROLES) || attr.getName().equals(ATTR_CLIENT_ROLES)) {
+                // Roles are mapped via RoleMappingResource, handled in createUser method.
 
             } else {
                 if (!schema.isUserSchema(attr)) {
@@ -207,6 +256,10 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         UserRepresentation current;
         List<String> addGroupIds = new ArrayList<>();
         List<String> removeGroupIds = new ArrayList<>();
+        List<String> addRealmRoles = new ArrayList<>();
+        List<String> removeRealmRoles = new ArrayList<>();
+        List<String> addClientRoles = new ArrayList<>();
+        List<String> removeClientRoles = new ArrayList<>();
         CredentialRepresentation credential = null;
 
         try {
@@ -259,6 +312,48 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                     if (delta.getValuesToRemove() != null) {
                         for (Object group : delta.getValuesToRemove()) {
                             removeGroupIds.add(group.toString());
+                        }
+                    }
+
+                } else if (delta.getName().equals(ATTR_REQUIRED_ACTIONS)) {
+                    // Start from current actions to preserve existing ones
+                    List<String> actions = new ArrayList<>(
+                            current.getRequiredActions() != null ? current.getRequiredActions() : Collections.emptyList());
+                    if (delta.getValuesToRemove() != null) {
+                        actions.removeAll(delta.getValuesToRemove().stream()
+                                .map(Object::toString).collect(Collectors.toSet()));
+                    }
+                    if (delta.getValuesToAdd() != null) {
+                        for (Object a : delta.getValuesToAdd()) {
+                            String action = a.toString();
+                            if (!actions.contains(action)) {
+                                actions.add(action);
+                            }
+                        }
+                    }
+                    current.setRequiredActions(actions);
+
+                } else if (delta.getName().equals(ATTR_REALM_ROLES)) {
+                    if (delta.getValuesToAdd() != null) {
+                        for (Object role : delta.getValuesToAdd()) {
+                            addRealmRoles.add(role.toString());
+                        }
+                    }
+                    if (delta.getValuesToRemove() != null) {
+                        for (Object role : delta.getValuesToRemove()) {
+                            removeRealmRoles.add(role.toString());
+                        }
+                    }
+
+                } else if (delta.getName().equals(ATTR_CLIENT_ROLES)) {
+                    if (delta.getValuesToAdd() != null) {
+                        for (Object role : delta.getValuesToAdd()) {
+                            addClientRoles.add(role.toString());
+                        }
+                    }
+                    if (delta.getValuesToRemove() != null) {
+                        for (Object role : delta.getValuesToRemove()) {
+                            removeClientRoles.add(role.toString());
                         }
                     }
 
@@ -337,6 +432,11 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
                         groupId, current.getId(), current.getUsername());
             }
         }
+
+        addRealmRolesToUser(realmName, current.getId(), current.getUsername(), addRealmRoles);
+        removeRealmRolesFromUser(realmName, current.getId(), current.getUsername(), removeRealmRoles);
+        addClientRolesToUser(realmName, current.getId(), current.getUsername(), addClientRoles);
+        removeClientRolesFromUser(realmName, current.getId(), current.getUsername(), removeClientRoles);
     }
 
     @Override
@@ -359,25 +459,43 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         boolean allowPartialAttributeValues = shouldAllowPartialAttributeValues(options);
 
         UsersResource users = users(realmName);
+        int totalCount = users.count();
 
-        Integer count = users.count();
+        LOGGER.ok("[{0}] getUsers: totalCount={1}, requestedPageSize={2}, requestedOffset={3}",
+                instanceName, totalCount,
+                options != null ? options.getPageSize() : null,
+                options != null ? options.getPagedResultsOffset() : null);
 
+        // Stream all users in internal batches and let MidPoint handle display-level paging.
+        // Reporting allResultsReturned=true lets MidPoint derive the exact total count
+        // from the objects returned, preventing phantom Integer.MAX_VALUE page counts.
         int start = 0;
         int total = 0;
 
-        while (total < count) {
+        while (total < totalCount) {
             List<UserRepresentation> results = users.search("", start, queryPageSize, true);
 
-            if (results.size() == 0) {
+            if (results.isEmpty()) {
                 break;
             }
 
             for (UserRepresentation rep : results) {
-                handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet, allowPartialAttributeValues, queryPageSize));
+                LOGGER.ok("Processing user: {0}", rep.getUsername());
+                if (!handler.handle(toConnectorObject(schema, realmName, rep, attributesToGet,
+                        allowPartialAttributeValues, queryPageSize))) {
+                    if (handler instanceof SearchResultsHandler) {
+                        ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
+                    }
+                    return;
+                }
             }
 
             total += results.size();
             start += queryPageSize;
+        }
+
+        if (handler instanceof SearchResultsHandler) {
+            ((SearchResultsHandler) handler).handleResult(new SearchResult(null, 0, true));
         }
     }
 
@@ -413,9 +531,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         int total = 0;
 
         while (total < count) {
-            int end = start + queryPageSize;
-
-            List<UserRepresentation> results = users.search(name.getNameValue(), start, end, true);
+            List<UserRepresentation> results = users.search(name.getNameValue(), start, queryPageSize, true);
 
             if (results.size() == 0) {
                 break;
@@ -430,7 +546,7 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             }
 
             total += results.size();
-            start = end + 1;
+            start += results.size();
         }
 
         // NotFound
@@ -465,6 +581,12 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
         if (shouldReturn(attributesToGet, ATTR_LAST_NAME)) {
             builder.addAttribute(ATTR_LAST_NAME, user.getLastName());
         }
+        if (shouldReturn(attributesToGet, ATTR_REQUIRED_ACTIONS)) {
+            List<String> requiredActions = user.getRequiredActions();
+            if (requiredActions != null) {
+                builder.addAttribute(ATTR_REQUIRED_ACTIONS, requiredActions);
+            }
+        }
 
         Map<String, List<String>> attributes = user.getAttributes();
         if (attributes != null) {
@@ -491,20 +613,167 @@ public class KeycloakAdminRESTUser implements KeycloakClient.User {
             ab.setName(ATTR_GROUPS).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
             ab.addValue(Collections.EMPTY_LIST);
             builder.addAttribute(ab.build());
+
+            AttributeBuilder arb = new AttributeBuilder();
+            arb.setName(ATTR_REALM_ROLES).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
+            arb.addValue(Collections.EMPTY_LIST);
+            builder.addAttribute(arb.build());
+
+            AttributeBuilder acrb = new AttributeBuilder();
+            acrb.setName(ATTR_CLIENT_ROLES).setAttributeValueCompleteness(AttributeValueCompleteness.INCOMPLETE);
+            acrb.addValue(Collections.EMPTY_LIST);
+            builder.addAttribute(acrb.build());
         } else {
             if (attributesToGet == null) {
-                // Suppress fetching groups default
-                LOGGER.ok("[{0}] Suppress fetching groups because returned by default is true", instanceName);
+                // Suppress fetching groups/roles default
+                LOGGER.ok("[{0}] Suppress fetching groups/roles because returned by default is false", instanceName);
 
-            } else if (shouldReturn(attributesToGet, ATTR_GROUPS)) {
-                // Fetch groups
-                LOGGER.ok("[{0}] Fetching groups because attributes to get is requested", instanceName);
+            } else {
+                if (shouldReturn(attributesToGet, ATTR_GROUPS)) {
+                    // Fetch groups
+                    LOGGER.ok("[{0}] Fetching groups because attributes to get is requested", instanceName);
 
-                List<GroupRepresentation> groups = users(realmName).get(user.getId()).groups();
-                builder.addAttribute(ATTR_GROUPS, groups.stream().map(g -> g.getId()).collect(Collectors.toList()));
+                    List<GroupRepresentation> groups = users(realmName).get(user.getId()).groups();
+                    builder.addAttribute(ATTR_GROUPS, groups.stream().map(g -> g.getId()).collect(Collectors.toList()));
+                }
+
+                if (shouldReturn(attributesToGet, ATTR_REALM_ROLES)) {
+                    LOGGER.ok("[{0}] Fetching realm roles because attributes to get is requested", instanceName);
+
+                    List<RoleRepresentation> roles = users(realmName).get(user.getId()).roles().realmLevel().listAll();
+                    builder.addAttribute(ATTR_REALM_ROLES, roles.stream().map(r -> r.getName()).collect(Collectors.toList()));
+                }
+
+                if (shouldReturn(attributesToGet, ATTR_CLIENT_ROLES)) {
+                    LOGGER.ok("[{0}] Fetching client roles because attributes to get is requested", instanceName);
+
+                    // Collect client roles in "<clientUUID>/<roleId>" format (matches ClientRole UID)
+                    List<String> clientRoleValues = new ArrayList<>();
+                    realm(realmName).clients().findAll().forEach(client -> {
+                        List<RoleRepresentation> clientRoles = users(realmName).get(user.getId())
+                                .roles().clientLevel(client.getId()).listAll();
+                        for (RoleRepresentation cr : clientRoles) {
+                            clientRoleValues.add(client.getId() + "/" + cr.getId());
+                        }
+                    });
+                    builder.addAttribute(ATTR_CLIENT_ROLES, clientRoleValues);
+                }
             }
         }
 
         return builder.build();
+    }
+
+    // --- Helper methods for role management ---
+
+    private void addRealmRolesToUser(String realmName, String userId, String username, List<String> roleNames) {
+        if (roleNames.isEmpty()) return;
+        List<RoleRepresentation> rolesToAdd = new ArrayList<>();
+        for (String roleName : roleNames) {
+            try {
+                rolesToAdd.add(realm(realmName).roles().get(roleName).toRepresentation());
+            } catch (NotFoundException e) {
+                LOGGER.warn("Realm role not found, skipping. roleName: {0}, userId: {1}, username: {2}",
+                        roleName, userId, username);
+            }
+        }
+        if (!rolesToAdd.isEmpty()) {
+            users(realmName).get(userId).roles().realmLevel().add(rolesToAdd);
+        }
+    }
+
+    private static final int BULK_ROLE_UNASSIGN_THRESHOLD = 3;
+
+    private void removeRealmRolesFromUser(String realmName, String userId, String username, List<String> roleNames) {
+        if (roleNames.isEmpty()) return;
+        List<RoleRepresentation> rolesToRemove;
+        if (roleNames.size() > BULK_ROLE_UNASSIGN_THRESHOLD) {
+            // When removing many roles, fetch all assigned roles once and filter locally
+            // instead of making individual get-by-name API calls for each role.
+            Set<String> toRemove = new HashSet<>(roleNames);
+            rolesToRemove = users(realmName).get(userId).roles().realmLevel().listAll().stream()
+                    .filter(r -> toRemove.contains(r.getName()))
+                    .collect(Collectors.toList());
+        } else {
+            rolesToRemove = new ArrayList<>();
+            for (String roleName : roleNames) {
+                try {
+                    rolesToRemove.add(realm(realmName).roles().get(roleName).toRepresentation());
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Realm role not found, skipping. roleName: {0}, userId: {1}, username: {2}",
+                            roleName, userId, username);
+                }
+            }
+        }
+        if (!rolesToRemove.isEmpty()) {
+            users(realmName).get(userId).roles().realmLevel().remove(rolesToRemove);
+        }
+    }
+
+    private void addClientRolesToUser(String realmName, String userId, String username, List<String> clientRoleValues) {
+        if (clientRoleValues.isEmpty()) return;
+        Map<String, List<String>> byClient = new HashMap<>();
+        for (String value : clientRoleValues) {
+            int idx = value.indexOf("/");
+            if (idx <= 0) {
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleId): {0}", value);
+                continue;
+            }
+            byClient.computeIfAbsent(value.substring(0, idx), k -> new ArrayList<>()).add(value.substring(idx + 1));
+        }
+        for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
+            String clientUUID = entry.getKey();
+            List<RoleRepresentation> rolesToAdd = new ArrayList<>();
+            for (String roleId : entry.getValue()) {
+                try {
+                    rolesToAdd.add(realm(realmName).rolesById().getRole(roleId));
+                } catch (NotFoundException e) {
+                    LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleId: {1}, userId: {2}, username: {3}",
+                            clientUUID, roleId, userId, username);
+                }
+            }
+            if (!rolesToAdd.isEmpty()) {
+                users(realmName).get(userId).roles().clientLevel(clientUUID).add(rolesToAdd);
+            }
+        }
+    }
+
+    private void removeClientRolesFromUser(String realmName, String userId, String username, List<String> clientRoleValues) {
+        if (clientRoleValues.isEmpty()) return;
+        Map<String, List<String>> byClient = new HashMap<>();
+        for (String value : clientRoleValues) {
+            int idx = value.indexOf("/");
+            if (idx <= 0) {
+                LOGGER.warn("Invalid client role format (expected clientUUID/roleId): {0}", value);
+                continue;
+            }
+            byClient.computeIfAbsent(value.substring(0, idx), k -> new ArrayList<>()).add(value.substring(idx + 1));
+        }
+        for (Map.Entry<String, List<String>> entry : byClient.entrySet()) {
+            String clientUUID = entry.getKey();
+            List<String> roleIds = entry.getValue();
+            List<RoleRepresentation> rolesToRemove;
+            if (roleIds.size() > BULK_ROLE_UNASSIGN_THRESHOLD) {
+                // When removing many roles per client, fetch all assigned roles once
+                // and filter locally instead of making individual get-by-id API calls.
+                Set<String> toRemove = new HashSet<>(roleIds);
+                rolesToRemove = users(realmName).get(userId).roles().clientLevel(clientUUID).listAll().stream()
+                        .filter(r -> toRemove.contains(r.getId()))
+                        .collect(Collectors.toList());
+            } else {
+                rolesToRemove = new ArrayList<>();
+                for (String roleId : roleIds) {
+                    try {
+                        rolesToRemove.add(realm(realmName).rolesById().getRole(roleId));
+                    } catch (NotFoundException e) {
+                        LOGGER.warn("Client role not found, skipping. clientUUID: {0}, roleId: {1}, userId: {2}, username: {3}",
+                                clientUUID, roleId, userId, username);
+                    }
+                }
+            }
+            if (!rolesToRemove.isEmpty()) {
+                users(realmName).get(userId).roles().clientLevel(clientUUID).remove(rolesToRemove);
+            }
+        }
     }
 }

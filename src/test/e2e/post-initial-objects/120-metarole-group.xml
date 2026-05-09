@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<role oid="37da487d-1060-411a-9e84-79d5ab1e7cda"
+      xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+      xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+      xmlns:icfs="http://midpoint.evolveum.com/xml/ns/public/connector/icf-1/resource-schema-3"
+      xmlns:org="http://midpoint.evolveum.com/xml/ns/public/common/org-3"
+      xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3"
+      xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3"
+      xmlns:t="http://prism.evolveum.com/xml/ns/public/types-3"
+    >
+    <name>keycloak-group-metarole</name>
+    <description>Keycloak group metarole</description>
+    <displayName>Keycloak group metarole</displayName>
+    <inducement>
+        <description>group provisioning</description>
+        <construction>
+            <resourceRef oid="150b94ef-9a4e-4092-8ba6-2a7fbbf4783c" relation="org:default" type="c:ResourceType"/>
+            <kind>entitlement</kind>
+            <intent>default</intent>
+        </construction>
+        <focusType>c:OrgType</focusType>
+    </inducement>
+    <inducement>
+        <description>
+            Assign the user to the group.
+        </description>
+        <construction>
+            <strength>weak</strength>
+            <resourceRef oid="150b94ef-9a4e-4092-8ba6-2a7fbbf4783c" relation="org:default" type="c:ResourceType"/>
+            <kind>account</kind>
+            <intent>default</intent>
+            <association>
+                <c:ref>ri:group</c:ref>
+                <outbound>
+                    <authoritative>true</authoritative>
+                    <strength>strong</strength>
+                    <expression>
+                        <associationFromLink>
+                            <projectionDiscriminator>
+                                <kind>entitlement</kind>
+                                <intent>default</intent>
+                            </projectionDiscriminator>
+                            <assignmentPathIndex>1</assignmentPathIndex>
+                        </associationFromLink>
+                    </expression>
+                </outbound>
+            </association>
+        </construction>
+        <order>2</order>
+        <focusType>c:UserType</focusType>
+    </inducement>
+    <inducement>
+        <description>
+            Assign the group to the group (create group tree).
+        </description>
+        <construction>
+            <strength>weak</strength>
+            <resourceRef oid="150b94ef-9a4e-4092-8ba6-2a7fbbf4783c" relation="org:default" type="c:ResourceType"/>
+            <kind>entitlement</kind>
+            <intent>default</intent>
+            <association>
+                <c:ref>ri:group</c:ref>
+                <outbound>
+                    <authoritative>true</authoritative>
+                    <strength>strong</strength>
+                    <expression>
+                        <associationFromLink>
+                            <projectionDiscriminator>
+                                <kind>entitlement</kind>
+                                <intent>default</intent>
+                            </projectionDiscriminator>
+                            <assignmentPathIndex>1</assignmentPathIndex>
+                        </associationFromLink>
+                    </expression>
+                </outbound>
+            </association>
+        </construction>
+        <order>2</order>
+        <focusType>c:OrgType</focusType>
+    </inducement>
+    <requestable>false</requestable>
+</role>

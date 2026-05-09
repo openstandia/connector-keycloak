@@ -15,7 +15,11 @@
  */
 package jp.openstandia.connector.keycloak.rest;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
+import com.fasterxml.jackson.jakarta.rs.json.JacksonXmlBindJsonProvider;
 import jp.openstandia.connector.keycloak.KeycloakClient;
 import jp.openstandia.connector.keycloak.KeycloakConfiguration;
 import org.identityconnectors.common.StringUtil;
@@ -49,21 +53,57 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
     private final KeycloakAdminRESTGroup group;
     private final KeycloakAdminRESTClient client;
     private final KeycloakAdminRESTClientRole clientRole;
+    private final KeycloakAdminRESTRealmRole realmRole;
     private Keycloak adminClient;
 
     public KeycloakAdminRESTAdminClient(String instanceName, KeycloakConfiguration configuration) {
         this.instanceName = instanceName;
         this.cofiguration = configuration;
 
-        try {
-            RuntimeDelegate.getInstance();
-        } catch (Throwable t) {
-            // Set the implementation directly as a workaround
-            RuntimeDelegate.setInstance(new ResteasyProviderFactoryImpl());
-        }
+        // Force RESTEasy's RuntimeDelegate implementation.
+        //
+        // ConnId's BundleClassLoader uses child-first class loading for classes, but
+        // ServiceLoader (used by RuntimeDelegate.getInstance()) discovers providers from
+        // all classloader entries including the parent (MidPoint's Spring Boot ClassLoader).
+        // MidPoint 4.8+ bundles Apache CXF, whose RuntimeDelegateImpl is found by ServiceLoader
+        // and is incompatible with RESTEasy, causing:
+        //   ServiceConfigurationError: RuntimeDelegateImpl not a subtype
+        //
+        // Verified behavior across MidPoint versions:
+        // - 4.0/4.4: getInstance() returns RESTEasy (CXF not present in parent classloader)
+        // - 4.8/4.10: getInstance() throws ServiceConfigurationError (CXF found but incompatible)
+        // In all cases, unconditional setInstance() is safe and ensures RESTEasy is used.
+        RuntimeDelegate.setInstance(new ResteasyProviderFactoryImpl());
 
         ResteasyClientBuilder resteasyClientBuilder = new ResteasyClientBuilderImpl();
         resteasyClientBuilder.connectionPoolSize(20);
+        resteasyClientBuilder.connectTimeout(configuration.getHttpConnectTimeoutInMilliseconds(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        resteasyClientBuilder.readTimeout(configuration.getHttpReadTimeoutInMilliseconds(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        resteasyClientBuilder.connectionCheckoutTimeout(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        // Register a Jackson JSON provider with a pre-configured ObjectMapper.
+        //
+        // Normally, keycloak-admin-client uses its own JacksonProvider (which extends
+        // ResteasyJackson2Provider) to configure ObjectMapper with NON_NULL and
+        // FAIL_ON_UNKNOWN_PROPERTIES=false for cross-version compatibility.
+        // See: https://www.keycloak.org/securing-apps/admin-client
+        //
+        // However, ResteasyJackson2Provider has a field initializer that calls
+        // ObjectMapper.findAndRegisterModules(), which uses Java ServiceLoader.
+        // In MidPoint's ConnId BundleClassLoader environment, ServiceLoader discovers
+        // Jackson modules from MidPoint's parent classloader (Spring Boot LaunchedClassLoader)
+        // that are incompatible with the connector's Jackson version, causing:
+        //   ServiceConfigurationError: ParameterNamesModule not a subtype
+        //
+        // To avoid this, we exclude resteasy-jackson2-provider from dependencies and
+        // register JacksonXmlBindJsonProvider directly with a safe ObjectMapper that
+        // does not call findAndRegisterModules(). The ObjectMapper settings match
+        // Keycloak's JacksonProvider: NON_NULL and FAIL_ON_UNKNOWN_PROPERTIES=false.
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+        resteasyClientBuilder.register(new JacksonXmlBindJsonProvider(
+                mapper, JacksonXmlBindJsonProvider.DEFAULT_ANNOTATIONS));
 
         // HTTP proxy configuration
         if (configuration.getHttpProxyHost() != null && configuration.getHttpProxyPort() != 0) {
@@ -83,11 +123,15 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
             }
         }
 
+        // Normalize the server URL once to avoid double-slash or /auth legacy issues.
+        final String normalizedServerUrl = configuration.getNormalizedServerUrl();
+        LOGGER.ok("Using Keycloak server URL: {0}", normalizedServerUrl);
+
         // grant_type=password mode
         if (configuration.getUsername() != null && configuration.getPassword() != null) {
             configuration.getPassword().access(s -> {
                 adminClient = KeycloakBuilder.builder()
-                        .serverUrl(configuration.getServerUrl())
+                        .serverUrl(normalizedServerUrl)
                         .realm(configuration.getRealmName())
                         .grantType("password")
                         .username(configuration.getUsername())
@@ -99,7 +143,7 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         } else if (configuration.getClientSecret() != null) {
             configuration.getClientSecret().access(s -> {
                 adminClient = KeycloakBuilder.builder()
-                        .serverUrl(configuration.getServerUrl())
+                        .serverUrl(normalizedServerUrl)
                         .realm(configuration.getRealmName())
                         .grantType("client_credentials")
                         .clientId(configuration.getClientId())
@@ -113,6 +157,7 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         this.group = new KeycloakAdminRESTGroup(instanceName, configuration, adminClient);
         this.client = new KeycloakAdminRESTClient(instanceName, configuration, adminClient);
         this.clientRole = new KeycloakAdminRESTClientRole(instanceName, configuration, adminClient);
+        this.realmRole = new KeycloakAdminRESTRealmRole(instanceName, configuration, adminClient);
     }
 
     private RealmResource realm(String realmName) {
@@ -139,8 +184,28 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
 
     @Override
     public String getVersion() {
-        ServerInfoRepresentation info = adminClient.serverInfo().getInfo();
-        return info.getSystemInfo().getVersion();
+        // The /admin/serverinfo endpoint requires master-realm admin credentials.
+        // When the connector is configured to authenticate against a non-master realm,
+        // serverInfo().getInfo() may return a ServerInfoRepresentation where getSystemInfo()
+        // is null (access denied or incomplete response).
+        // In that case we fall back to a synthetic version string derived from the
+        // admin-client library version so that KeycloakSchema.parseVersion() still works.
+        try {
+            ServerInfoRepresentation info = adminClient.serverInfo().getInfo();
+            if (info != null && info.getSystemInfo() != null && info.getSystemInfo().getVersion() != null) {
+                return info.getSystemInfo().getVersion();
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Could not retrieve server version via /admin/serverinfo (may require master realm access): {0}", e.getMessage());
+        }
+        // Fallback: return the keycloak-admin-client jar version so the connector
+        // can still initialise and operate correctly against the target realm.
+        String fallback = org.keycloak.admin.client.Keycloak.class.getPackage().getImplementationVersion();
+        if (fallback == null) {
+            fallback = "26.0.0";
+        }
+        LOGGER.ok("Falling back to library version: {0}", fallback);
+        return fallback;
     }
 
     @Override
@@ -161,6 +226,11 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
     @Override
     public ClientRole clientRole() {
         return clientRole;
+    }
+
+    @Override
+    public RealmRole realmRole() {
+        return realmRole;
     }
 
     @Override

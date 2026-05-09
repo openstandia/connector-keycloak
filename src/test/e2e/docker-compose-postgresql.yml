@@ -1,0 +1,87 @@
+name: e2e
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.1
+    command: start-dev
+    environment:
+     - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+     - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    networks:
+     - net
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /realms/master HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | head -1 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  postgres:
+    image: postgres:16
+    environment:
+     - POSTGRES_PASSWORD=db.secret.pw.007
+     - POSTGRES_USER=midpoint
+     - POSTGRES_INITDB_ARGS=--lc-collate=en_US.utf8 --lc-ctype=en_US.utf8
+    networks:
+     - net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U midpoint"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  midpoint_init:
+    image: ${MIDPOINT_IMAGE}
+    command: >
+      bash -c "
+      cd /opt/midpoint ;
+      bin/midpoint.sh init-native ;
+      echo ' - - - - - - ' ;
+      bin/ninja.sh -B info >/dev/null 2>/tmp/ninja.log ;
+      grep -q \"ERROR\" /tmp/ninja.log && (
+      bin/ninja.sh run-sql --create --mode REPOSITORY  ;
+      bin/ninja.sh run-sql --create --mode AUDIT
+      ) ||
+      echo -e '\\n Repository init is not needed...' ;
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+     - MP_SET_midpoint_repository_jdbcUsername=midpoint
+     - MP_SET_midpoint_repository_jdbcPassword=db.secret.pw.007
+     - MP_SET_midpoint_repository_jdbcUrl=jdbc:postgresql://postgres:5432/midpoint
+     - MP_SET_midpoint_repository_database=postgresql
+     - MP_INIT_CFG=/opt/midpoint/var
+    networks:
+     - net
+    volumes:
+     - midpoint_home:/opt/midpoint/var
+
+  midpoint:
+    image: ${MIDPOINT_IMAGE}
+    depends_on:
+      midpoint_init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+    command: [ "/opt/midpoint/bin/midpoint.sh", "container" ]
+    environment:
+     - MP_SET_midpoint_repository_jdbcUsername=midpoint
+     - MP_SET_midpoint_repository_jdbcPassword=db.secret.pw.007
+     - MP_SET_midpoint_repository_jdbcUrl=jdbc:postgresql://postgres:5432/midpoint
+     - MP_SET_midpoint_repository_database=postgresql
+     - MP_SET_midpoint_administrator_initialPassword=Test5ecr3t
+     - MP_UNSET_midpoint_repository_hibernateHbm2ddl=1
+     - MP_NO_ENV_COMPAT=1
+    networks:
+     - net
+    volumes:
+     - midpoint_home:/opt/midpoint/var
+     - ${CONNECTOR_JAR}:/opt/midpoint/var/icf-connectors/connector-keycloak.jar:ro
+     - ./post-initial-objects:/opt/midpoint/var/post-initial-objects:ro
+
+networks:
+  net:
+    driver: bridge
+
+volumes:
+  midpoint_home:

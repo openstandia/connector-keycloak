@@ -21,6 +21,9 @@ import org.identityconnectors.framework.common.exceptions.ConfigurationException
 import org.identityconnectors.framework.spi.AbstractConfiguration;
 import org.identityconnectors.framework.spi.ConfigurationProperty;
 
+import java.net.MalformedURLException;
+import java.net.URL;
+
 /**
  * Connector Configuration implementation for keycloak connector.
  *
@@ -38,11 +41,11 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     private String userAttributes;
     private String groupAttributes;
     private String clientAttributes;
+    private String realmRoleAttributes;
     private int queryPageSize;
     private boolean passwordResetAPIEnabled;
-    private boolean grpcEnabled;
-    private String grpcHost;
-    private int grpcPort;
+    private int httpConnectTimeoutInMilliseconds = 10000;
+    private int httpReadTimeoutInMilliseconds = 30000;
 
     private String httpProxyHost;
     private int httpProxyPort;
@@ -52,11 +55,32 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     @ConfigurationProperty(
             order = 1,
             displayMessageKey = "Keycloak Server URL",
-            helpMessageKey = "Keycloak Server URL (ex. https://mykeycloak/auth).",
+            helpMessageKey = "Base URL of the Keycloak server. May include a context path. " +
+                    "Examples: https://iam.example.com  or  https://iam.example.com/iam  " +
+                    "Do NOT append /auth (legacy Keycloak < 17) or any realm/admin suffix. " +
+                    "A trailing slash is accepted and will be stripped automatically.",
             required = true,
             confidential = false)
     public String getServerUrl() {
         return serverUrl;
+    }
+
+    /**
+     * Returns the server URL normalized for use with the Keycloak admin client:
+     * trailing slashes are stripped so the client can append /realms/... paths cleanly.
+     * Both plain host URLs (https://iam.example.com) and sub-path URLs
+     * (https://iam.example.com/iam) are supported.
+     */
+    public String getNormalizedServerUrl() {
+        if (serverUrl == null) {
+            return null;
+        }
+        String normalized = serverUrl.trim();
+        // Strip all trailing slashes so the admin client can append paths correctly
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     public void setServerUrl(String serverUrl) {
@@ -194,6 +218,20 @@ public class KeycloakConfiguration extends AbstractConfiguration {
 
     @ConfigurationProperty(
             order = 11,
+            displayMessageKey = "Realm Role Attributes",
+            helpMessageKey = "Keycloak realm role attributes (comma-separated).",
+            required = false,
+            confidential = false)
+    public String getRealmRoleAttributes() {
+        return realmRoleAttributes;
+    }
+
+    public void setRealmRoleAttributes(String realmRoleAttributes) {
+        this.realmRoleAttributes = realmRoleAttributes;
+    }
+
+    @ConfigurationProperty(
+            order = 12,
             displayMessageKey = "Query Page Size",
             helpMessageKey = "Page size of search query in the connector. Default is 100.",
             required = false,
@@ -210,7 +248,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 12,
+            order = 13,
             displayMessageKey = "Enable Password Reset API for update password",
             helpMessageKey = "If yes, the connector uses password reset API instead of create/update user API. " +
                     "Pros. The raw password isn't recorded in the Keycloak admin event. " +
@@ -226,45 +264,31 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 13,
-            displayMessageKey = "Enable gRPC",
-            helpMessageKey = "Enable gRPC for the Keycloak API. CAUTION: You need to install keycloak-grpc on the Keycloak server.",
-            required = false,
-            confidential = false)
-    public boolean isGrpcEnabled() {
-        return grpcEnabled;
-    }
-
-    public void setGrpcEnabled(boolean grpcEnabled) {
-        this.grpcEnabled = grpcEnabled;
-    }
-
-    @ConfigurationProperty(
             order = 14,
-            displayMessageKey = "gRPC Host",
-            helpMessageKey = "Hostname for gRPC connection.",
+            displayMessageKey = "HTTP Connect Timeout (in milliseconds)",
+            helpMessageKey = "Connection timeout when connecting to the Keycloak server. (Default: 10000)",
             required = false,
             confidential = false)
-    public String getGrpcHost() {
-        return grpcHost;
+    public int getHttpConnectTimeoutInMilliseconds() {
+        return httpConnectTimeoutInMilliseconds;
     }
 
-    public void setGrpcHost(String grpcHost) {
-        this.grpcHost = grpcHost;
+    public void setHttpConnectTimeoutInMilliseconds(int httpConnectTimeoutInMilliseconds) {
+        this.httpConnectTimeoutInMilliseconds = httpConnectTimeoutInMilliseconds;
     }
 
     @ConfigurationProperty(
             order = 15,
-            displayMessageKey = "gRPC Port",
-            helpMessageKey = "Port for gRPC connection.",
+            displayMessageKey = "HTTP Read Timeout (in milliseconds)",
+            helpMessageKey = "Read timeout when fetching data from the Keycloak server. (Default: 30000)",
             required = false,
             confidential = false)
-    public int getGrpcPort() {
-        return grpcPort;
+    public int getHttpReadTimeoutInMilliseconds() {
+        return httpReadTimeoutInMilliseconds;
     }
 
-    public void setGrpcPort(int grpcHost) {
-        this.grpcPort = grpcPort;
+    public void setHttpReadTimeoutInMilliseconds(int httpReadTimeoutInMilliseconds) {
+        this.httpReadTimeoutInMilliseconds = httpReadTimeoutInMilliseconds;
     }
 
     @ConfigurationProperty(
@@ -325,8 +349,20 @@ public class KeycloakConfiguration extends AbstractConfiguration {
 
     @Override
     public void validate() {
+        if (StringUtil.isBlank(serverUrl)) {
+            throw new ConfigurationException("Server URL must be provided.");
+        }
+        try {
+            URL url = new URL(getNormalizedServerUrl());
+            String protocol = url.getProtocol();
+            if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
+                throw new ConfigurationException("Server URL must use http or https scheme: " + serverUrl);
+            }
+        } catch (MalformedURLException e) {
+            throw new ConfigurationException("Server URL is not a valid URL: " + serverUrl, e);
+        }
         if (StringUtil.isBlank(getUsername()) || getPassword() == null && getClientSecret() == null) {
-            throw new ConfigurationException("Invalid client credential: need to setup username/password or client secret.");
+            throw new ConfigurationException("Invalid client credential: need to setup username/password or clientId/clientSecret.");
         }
     }
 }
