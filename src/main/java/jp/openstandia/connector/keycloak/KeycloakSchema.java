@@ -43,6 +43,7 @@ public class KeycloakSchema {
     public final Map<String, AttributeInfo> groupSchema;
     public final Map<String, AttributeInfo> clientSchema;
     public final Map<String, AttributeInfo> clientRoleSchema;
+    public final Map<String, AttributeInfo> realmRoleSchema;
 
     public KeycloakSchema(KeycloakConfiguration configuration, KeycloakClient client) {
         this.configuration = configuration;
@@ -61,6 +62,9 @@ public class KeycloakSchema {
 
         ObjectClassInfo clientRoleSchemaInfo = KeycloakClientRoleHandler.getSchema(new String[]{});
         schemaBuilder.defineObjectClass(clientRoleSchemaInfo);
+
+        ObjectClassInfo realmRoleSchemaInfo = KeycloakRealmRoleHandler.getSchema(getRealmRoleAttributes());
+        schemaBuilder.defineObjectClass(realmRoleSchemaInfo);
 
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildAttributesToGet(), SearchOp.class);
         schemaBuilder.defineOperationOption(OperationOptionInfoBuilder.buildReturnDefaultAttributes(), SearchOp.class);
@@ -87,10 +91,16 @@ public class KeycloakSchema {
             clientRoleSchemaMap.put(info.getName(), info);
         }
 
+        Map<String, AttributeInfo> realmRoleSchemaMap = new HashMap<>();
+        for (AttributeInfo info : realmRoleSchemaInfo.getAttributeInfo()) {
+            realmRoleSchemaMap.put(info.getName(), info);
+        }
+
         this.userSchema = Collections.unmodifiableMap(userSchemaMap);
         this.groupSchema = Collections.unmodifiableMap(groupSchemaMap);
         this.clientSchema = Collections.unmodifiableMap(clientSchemaMap);
         this.clientRoleSchema = Collections.unmodifiableMap(clientRoleSchemaMap);
+        this.realmRoleSchema = Collections.unmodifiableMap(realmRoleSchemaMap);
 
         this.version = client.getVersion();
 
@@ -131,6 +141,14 @@ public class KeycloakSchema {
         String clientAttributes = configuration.getClientAttributes();
         if (clientAttributes != null) {
             return clientAttributes.split(",");
+        }
+        return new String[]{};
+    }
+
+    private String[] getRealmRoleAttributes() {
+        String realmRoleAttributes = configuration.getRealmRoleAttributes();
+        if (realmRoleAttributes != null) {
+            return realmRoleAttributes.split(",");
         }
         return new String[]{};
     }
@@ -193,5 +211,25 @@ public class KeycloakSchema {
 
     public AttributeInfo getClientSchema(String attributeName) {
         return clientSchema.get(attributeName);
+    }
+
+    public boolean isRealmRoleSchema(Attribute attribute) {
+        return realmRoleSchema.containsKey(attribute.getName());
+    }
+
+    public boolean isMultiValuedRealmRoleSchema(Attribute attribute) {
+        return realmRoleSchema.get(attribute.getName()).isMultiValued();
+    }
+
+    public boolean isRealmRoleSchema(AttributeDelta delta) {
+        return realmRoleSchema.containsKey(delta.getName());
+    }
+
+    public boolean isMultiValuedRealmRoleSchema(AttributeDelta delta) {
+        return realmRoleSchema.get(delta.getName()).isMultiValued();
+    }
+
+    public AttributeInfo getRealmRoleSchema(String attributeName) {
+        return realmRoleSchema.get(attributeName);
     }
 }

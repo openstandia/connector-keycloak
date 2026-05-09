@@ -33,6 +33,7 @@ import java.util.Set;
 import static jp.openstandia.connector.keycloak.KeycloakClientHandler.CLIENT_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakClientRoleHandler.CLIENT_ROLE_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakGroupHandler.GROUP_OBJECT_CLASS;
+import static jp.openstandia.connector.keycloak.KeycloakRealmRoleHandler.REALM_ROLE_OBJECT_CLASS;
 import static jp.openstandia.connector.keycloak.KeycloakUserHandler.USER_OBJECT_CLASS;
 
 /**
@@ -109,6 +110,9 @@ public class KeycloakConnector implements PoolableConnector, CreateOp, UpdateDel
 
         } else if (objectClass.equals(CLIENT_ROLE_OBJECT_CLASS)) {
             return new KeycloakClientRoleHandler(instanceName, configuration, client, schema);
+
+        } else if (objectClass.equals(REALM_ROLE_OBJECT_CLASS)) {
+            return new KeycloakRealmRoleHandler(instanceName, configuration, client, schema);
 
         } else {
             throw new InvalidAttributeValueException("Unsupported object class " + objectClass);

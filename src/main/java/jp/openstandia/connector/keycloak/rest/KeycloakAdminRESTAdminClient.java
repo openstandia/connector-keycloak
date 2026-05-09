@@ -53,6 +53,7 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
     private final KeycloakAdminRESTGroup group;
     private final KeycloakAdminRESTClient client;
     private final KeycloakAdminRESTClientRole clientRole;
+    private final KeycloakAdminRESTRealmRole realmRole;
     private Keycloak adminClient;
 
     public KeycloakAdminRESTAdminClient(String instanceName, KeycloakConfiguration configuration) {
@@ -156,6 +157,7 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
         this.group = new KeycloakAdminRESTGroup(instanceName, configuration, adminClient);
         this.client = new KeycloakAdminRESTClient(instanceName, configuration, adminClient);
         this.clientRole = new KeycloakAdminRESTClientRole(instanceName, configuration, adminClient);
+        this.realmRole = new KeycloakAdminRESTRealmRole(instanceName, configuration, adminClient);
     }
 
     private RealmResource realm(String realmName) {
@@ -224,6 +226,11 @@ public class KeycloakAdminRESTAdminClient implements KeycloakClient {
     @Override
     public ClientRole clientRole() {
         return clientRole;
+    }
+
+    @Override
+    public RealmRole realmRole() {
+        return realmRole;
     }
 
     @Override

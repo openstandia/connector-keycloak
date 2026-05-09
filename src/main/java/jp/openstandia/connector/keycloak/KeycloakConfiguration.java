@@ -41,6 +41,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     private String userAttributes;
     private String groupAttributes;
     private String clientAttributes;
+    private String realmRoleAttributes;
     private int queryPageSize;
     private boolean passwordResetAPIEnabled;
     private int httpConnectTimeoutInMilliseconds = 10000;
@@ -217,6 +218,20 @@ public class KeycloakConfiguration extends AbstractConfiguration {
 
     @ConfigurationProperty(
             order = 11,
+            displayMessageKey = "Realm Role Attributes",
+            helpMessageKey = "Keycloak realm role attributes (comma-separated).",
+            required = false,
+            confidential = false)
+    public String getRealmRoleAttributes() {
+        return realmRoleAttributes;
+    }
+
+    public void setRealmRoleAttributes(String realmRoleAttributes) {
+        this.realmRoleAttributes = realmRoleAttributes;
+    }
+
+    @ConfigurationProperty(
+            order = 12,
             displayMessageKey = "Query Page Size",
             helpMessageKey = "Page size of search query in the connector. Default is 100.",
             required = false,
@@ -233,7 +248,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 12,
+            order = 13,
             displayMessageKey = "Enable Password Reset API for update password",
             helpMessageKey = "If yes, the connector uses password reset API instead of create/update user API. " +
                     "Pros. The raw password isn't recorded in the Keycloak admin event. " +
@@ -249,7 +264,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 13,
+            order = 14,
             displayMessageKey = "HTTP Connect Timeout (in milliseconds)",
             helpMessageKey = "Connection timeout when connecting to the Keycloak server. (Default: 10000)",
             required = false,
@@ -263,7 +278,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 14,
+            order = 15,
             displayMessageKey = "HTTP Read Timeout (in milliseconds)",
             helpMessageKey = "Read timeout when fetching data from the Keycloak server. (Default: 30000)",
             required = false,
@@ -277,7 +292,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 15,
+            order = 16,
             displayMessageKey = "HTTP Proxy Host",
             helpMessageKey = "Hostname for the HTTP Proxy",
             required = false,
@@ -291,7 +306,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 16,
+            order = 17,
             displayMessageKey = "HTTP Proxy Port",
             helpMessageKey = "Port for the HTTP Proxy",
             required = false,
@@ -305,7 +320,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 17,
+            order = 18,
             displayMessageKey = "HTTP Proxy User",
             helpMessageKey = "Username for the HTTP Proxy Authentication",
             required = false,
@@ -319,7 +334,7 @@ public class KeycloakConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(
-            order = 18,
+            order = 19,
             displayMessageKey = "HTTP Proxy Password",
             helpMessageKey = "Password for the HTTP Proxy Authentication",
             required = false,
